@@ -1,0 +1,6 @@
+<scripts>
+	<script id="carryingCapacityButterfly1" object="script{1}" />
+	<script id="carryingCapacityButterfly2" object="script{2}" />
+	<script id="carryingCapacityLarvae1" object="script{3}" />
+	<script id="carryingCapacityLarvae2" object="script{4}" />
+</scripts>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<simulators>
+	<simulator id="non_deterministic_transition_without_priorities"
+		class="org.gcn.plinguacore.simulator.cellLike.transition.NonDeterministicTransitionSimulatorWithoutPriorities"></simulator>
+	<simulator id="non_deterministic_transition"
+		class="org.gcn.plinguacore.simulator.cellLike.transition.NonDeterministicTransitionSimulator"></simulator>
+</simulators>

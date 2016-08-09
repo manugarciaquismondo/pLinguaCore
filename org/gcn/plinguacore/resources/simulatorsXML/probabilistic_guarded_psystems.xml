@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<simulators>
+	<simulator id="guard_based_simplified"
+		class="org.gcn.plinguacore.simulator.probabilisticGuarded.ProbabilisticGuardedSimplifiedSimulator"></simulator>
+	<simulator id="guard_based_multinomial"
+		class="org.gcn.plinguacore.simulator.probabilisticGuarded.ProbabilisticGuardedMultinomialSimulator"></simulator>
+	<simulator id="guard_based"
+		class="org.gcn.plinguacore.simulator.probabilisticGuarded.ProbabilisticGuardedSimulator"></simulator>
+</simulators>

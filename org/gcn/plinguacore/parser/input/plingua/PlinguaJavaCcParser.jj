@@ -1,0 +1,3470 @@
+/* 
+ * pLinguaCore: A JAVA library for Membrane Computing
+ *              http://www.p-lingua.org
+ *
+ * Copyright (C) 2009  Research Group on Natural Computing
+ *                     http://www.gcn.us.es
+ *                      
+ * This file is part of pLinguaCore.
+ *
+ * pLinguaCore is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * pLinguaCore is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with pLinguaCore.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+
+options{
+	LOOKAHEAD=1;
+	STATIC=false;
+	
+}
+PARSER_BEGIN(PlinguaJavaCcParser)
+
+package org.gcn.plinguacore.parser.input.plingua;
+
+import java.io.InputStream;
+import java.io.StringReader;
+import java.util.List;
+import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.Stack;
+import java.util.Iterator;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.Set;
+import java.util.HashSet;
+
+import org.gcn.plinguacore.parser.input.byteCounter.InputStreamWrapper;
+import org.gcn.plinguacore.parser.input.byteCounter.StringReaderWrapper;
+import org.gcn.plinguacore.util.HashMultiSet;
+import org.gcn.plinguacore.util.MultiSet;
+import org.gcn.plinguacore.util.PlinguaCoreException;
+import org.gcn.plinguacore.util.psystem.Label;
+import org.gcn.plinguacore.util.psystem.Psystem;
+import org.gcn.plinguacore.util.psystem.cellLike.membrane.CellLikeMembrane;
+import org.gcn.plinguacore.util.psystem.cellLike.membrane.CellLikeMembraneFactory;
+import org.gcn.plinguacore.util.psystem.cellLike.membrane.CellLikeSkinMembrane;
+import org.gcn.plinguacore.util.psystem.tissueLike.membrane.TissueLikeMembraneStructure;
+import org.gcn.plinguacore.util.psystem.tissueLike.membrane.TissueLikeMembrane;
+import org.gcn.plinguacore.util.psystem.tissueLike.membrane.TissueLikeMembraneFactory;
+import org.gcn.plinguacore.util.psystem.factory.AbstractPsystemFactory;
+import org.gcn.plinguacore.util.psystem.rule.AbstractRuleFactory;
+import org.gcn.plinguacore.util.psystem.rule.IStochasticRule;
+import org.gcn.plinguacore.util.psystem.rule.InnerRuleMembrane;
+import org.gcn.plinguacore.util.psystem.rule.LeftHandRule;
+import org.gcn.plinguacore.util.psystem.rule.OuterRuleMembrane;
+import org.gcn.plinguacore.util.psystem.rule.RightHandRule;
+import org.gcn.plinguacore.util.psystem.rule.IRule;
+import org.gcn.plinguacore.util.psystem.rule.spiking.SpikingRule;
+import org.gcn.plinguacore.util.psystem.spiking.membrane.SpikingMembrane;
+import org.gcn.plinguacore.util.psystem.spiking.membrane.SpikingMembraneStructure;
+import org.gcn.plinguacore.util.Pair;
+import org.gcn.plinguacore.util.psystem.spiking.membrane.Astrocyte;
+import org.gcn.plinguacore.util.psystem.spiking.membrane.HybridAstrocyte;
+import org.gcn.plinguacore.util.psystem.spiking.membrane.FunctionalAstrocyte;
+import org.gcn.plinguacore.util.psystem.spiking.membrane.AstrocyteFunction;
+import org.gcn.plinguacore.util.psystem.spiking.membrane.EvaluableFunction;
+import org.gcn.plinguacore.util.psystem.tissueLike.membrane.TissueLikeMembraneStructure;
+import org.gcn.plinguacore.util.psystem.rule.guard.*;
+import org.gcn.plinguacore.util.psystem.probabilisticGuarded.ProbabilisticGuardedPsystem;
+import org.gcn.plinguacore.util.psystem.rule.guard.probabilisticGuarded.*;
+import org.gcn.plinguacore.util.psystem.simplekernel.membrane.SimpleKernelLikeMembraneStructure;
+import org.gcn.plinguacore.util.psystem.simplekernel.membrane.SimpleKernelLikeMembrane;
+import org.gcn.plinguacore.util.psystem.simplekernel.membrane.SimpleKernelLikeMembraneFactory;
+import org.gcn.plinguacore.util.psystem.rule.simplekernel.KernelRuleTypes;
+import org.gcn.plinguacore.util.psystem.rule.regenerative.RegenerativeRuleTypes;
+import org.gcn.plinguacore.util.psystem.membrane.ChangeableMembrane;
+import org.gcn.plinguacore.util.psystem.cellLike.CellLikeInfEnvPsystem;
+import org.gcn.plinguacore.util.psystem.fuzzy.membrane.*;
+import org.gcn.plinguacore.util.psystem.fuzzy.*;
+import org.gcn.plinguacore.util.psystem.spiking.SpikingConstants;
+import org.gcn.plinguacore.util.psystem.rule.simplekernel.DivisionKernelLikeRule;
+import org.gcn.plinguacore.util.psystem.regenerative.membrane.RegenerativeMembraneStructure;
+import org.gcn.plinguacore.util.psystem.rule.regenerative.IRegenerativeLikeRule;
+import org.gcn.plinguacore.util.psystem.rule.regenerative.CommunicationRegenerativeLikeRule;
+import org.gcn.plinguacore.util.psystem.regenerative.RegenerativePsystem;
+
+class PlinguaJavaCcParser extends PlinguaProgram{
+	
+	
+	private static PlinguaJavaCcParser singleton=null;
+	private static Set<String > nonCheckedVariables;
+	private String expr=null;
+	private String ruleType = null;
+	private boolean computeEfficiencyAttributes=false;
+	private boolean existsBuddingOrDivisionRules = false;
+	private boolean existsFunctionalAstrocytes = false;
+
+	private boolean isSpikingPsystem()
+	{
+		return RuleChecker.matchModelID(getPsystem(), "spiking_psystems");
+	}
+
+	private boolean isFuzzyPsystem()
+	{
+		return RuleChecker.matchModelID(getPsystem(), "fuzzy_psystems");
+	}
+
+	private boolean isTrapezoidalFuzzyValue()
+	{
+		return isFuzzyPsystem() && ((FuzzyPsystem) getPsystem()).getFvalueType() == 0;
+	}
+
+	private boolean isRealFuzzyValue()
+	{		return isFuzzyPsystem() && ((FuzzyPsystem) getPsystem()).getFvalueType() == 1;
+	}
+
+	private boolean isWeightedFuzzyPsystem()
+	{
+		return isFuzzyPsystem() && ((FuzzyPsystem) getPsystem()).getSystemType() == 2;
+	}
+
+	private boolean isCellLikeInfEnvPsystem()
+	{
+		return RuleChecker.matchModelID(getPsystem(), "infEnv_symport_antiport");
+	}
+	
+	public boolean isKernelPsystem()
+	{
+		return RuleChecker.matchModelID(getPsystem(), "simple_kernel_psystems");
+	}
+
+	public boolean isProbabilisticGuardedPsystem()
+	{
+		return RuleChecker.matchModelID(getPsystem(), "probabilistic_guarded_psystems")||
+RuleChecker.matchModelID(getPsystem(), "overlappable_probabilistic_guarded_psystems");
+	}
+
+	public boolean isRegenerativePsystem()
+	{
+		return isNonSimpleRegenerativePsystem()||isSimpleRegenerativePsystem();
+	}
+	
+	public boolean isNonSimpleRegenerativePsystem(){
+		return RuleChecker.matchModelID(getPsystem(), "regenerative_psystems");
+	}
+		public boolean isSimpleRegenerativePsystem()
+	{
+		return RuleChecker.matchModelID(getPsystem(), "simple_regenerative_psystems");
+	}
+	
+	protected void updateRegenerativeDictionary(String l1, String l2, Token token) throws PlinguaSemanticsException{
+		try	{
+			((RegenerativePsystem)getPsystem()).updateInitialLinks(l1,l2);
+			writeInfo("Updating regenerative dictionary: ("+l1+", "+l2+")",4);
+		}catch(Exception ex)
+		{
+			throwSemanticsException(ex.getMessage(),token,token);
+		}
+	}
+
+	private boolean isTissuePsystem()
+    {
+    	return RuleChecker.matchModelID(getPsystem(), "tissue_psystems");
+    } 
+
+       private void doSentence(Stack<Token>ranges,Token sentenceToken,PlinguaEnvironment env,boolean execute) throws ParseException
+        {checkStopped();
+		if (env.getDepthLevel()>0)
+			return;
+                if (ranges.isEmpty())
+                {
+			if (execute)
+			{
+                        	Token currentToken=token;
+                        	token=sentenceToken;
+				jj_ntk=-1;
+				getCurrentEnvironment().disableSafeMode();
+                        	instruction();
+				getCurrentEnvironment().enableSafeMode();
+                        	token=currentToken;
+				jj_ntk=-1;
+			}
+                }
+                else
+                {
+                        Token rangeToken = ranges.pop();
+                        Token currentToken=token;
+                        token=rangeToken;
+			jj_ntk=-1;
+			getCurrentEnvironment().disableSafeMode();
+                    Range range=range(null,null);
+			getCurrentEnvironment().enableSafeMode();
+                        token=currentToken;
+			jj_ntk=-1;				
+                        double begin,end;
+                        begin=range.beginNumber.doubleValue();
+                        end=range.endNumber.doubleValue();
+
+			if (range.variable==null)
+				doSentence(ranges,sentenceToken,env,execute && begin!=end);
+			else
+			{
+                        	if (range.firstOperation==Range.LESS_OPERATION) begin++;
+                        	if (range.secondOperation==Range.LESS_OPERATION) end--;
+                        	for(double i=begin;i<=end;i++)
+                        	{checkStopped();
+					getCurrentEnvironment().disableSafeMode();
+                                	env.setVariable(range.variable,getNumber(i));
+					getCurrentEnvironment().enableSafeMode();
+                                	doSentence(ranges,sentenceToken,env,execute);
+                        	}
+				getCurrentEnvironment().disableSafeMode();
+                        	env.removeVariable(range.variable);
+				getCurrentEnvironment().enableSafeMode();
+			}
+			ranges.push(rangeToken);
+
+                }
+
+        }
+
+
+
+	
+		
+	static class Range {
+
+		public static final boolean LESS_OPERATION=false;
+		public static final boolean LESS_OR_EQUAL_OPERATION=true;
+
+		protected Number beginNumber;
+		protected boolean firstOperation;		
+		protected String variable;
+		protected boolean secondOperation;
+		protected Number endNumber;
+		public Range(Number beginNumber, boolean firstOperation, String variable, boolean secondOperation, Number endNumber) {
+			super();
+			this.beginNumber = beginNumber;
+			this.firstOperation = firstOperation;
+			this.variable = variable;
+			this.secondOperation = secondOperation;
+			this.endNumber = endNumber;
+		}
+		
+		
+	}
+	
+	private static Psystem parse(PlinguaJavaCcParser parser,PlinguaInputParser inputParser) throws PlinguaCoreException
+	{
+		try
+		{
+		  
+		  	if (inputParser.getThread()!=null&&inputParser.getThread().isThreadStopped())
+		  		throw new PlinguaCoreException("Stopped");
+		  		
+		  	parser.reset();			
+			parser.setInputParser(inputParser);
+			parser.grammar();
+			
+		  	if (inputParser.getThread()!=null&&inputParser.getThread().isThreadStopped())
+		  		throw new PlinguaCoreException("Stopped");
+		}
+		catch(ParseException ex)
+		{
+		  if (ex.getMessage().startsWith("Stopped"))
+		  	throw new PlinguaCoreException("Stopped");
+		  else	
+			parser.writeError(ex);
+		}
+		catch(TokenMgrError er)
+		{
+			parser.writeError(er);
+		}
+		if (parser.isError())
+			throw new PlinguaCoreException("Parser process finished with errors");
+
+		return parser.getPsystem();
+	}
+
+	        private static PlinguaJavaCcParser getInstance(InputStream stream)
+        {
+        		InputStreamWrapper streamWrapper = new InputStreamWrapper(stream);
+                if (singleton==null)
+                {
+                  
+                        singleton= new PlinguaJavaCcParser(streamWrapper);
+                        singleton.ReInit(streamWrapper);
+                        singleton.setStream(stream);	
+              	} else
+                        singleton.ReInit(streamWrapper);
+                 
+                
+                byteCounter=streamWrapper;
+                
+                return singleton;
+        }
+        private static PlinguaJavaCcParser getInstance(StringReader reader)
+        {
+        		StringReaderWrapper readerWrapper= new StringReaderWrapper(reader);
+                if (singleton==null)
+                {                 
+                        singleton= new PlinguaJavaCcParser(readerWrapper);
+                        singleton.ReInit(readerWrapper);
+                 }
+                 else
+                        singleton.ReInit(readerWrapper);
+                
+                byteCounter=readerWrapper;
+                return singleton;
+        }
+
+        protected static Psystem parse(InputStream stream,PlinguaInputParser inputParser) throws PlinguaCoreException
+        {
+
+
+                return parse(getInstance(stream),inputParser);
+        }
+
+        protected static Psystem parse(StringReader reader, PlinguaInputParser inputParser) throws PlinguaCoreException
+        {
+                return parse(getInstance(reader),inputParser);
+        }
+		
+	@Override
+	protected void doSafeCall(Token callToken) throws ParseException {
+		Token returnToken=token;
+		token=callToken;
+		jj_ntk=-1;
+		moduleBody();
+		token=returnToken;
+		jj_ntk=-1;
+	}
+
+	
+	
+}
+
+	
+
+	
+
+PARSER_END(PlinguaJavaCcParser)
+
+SKIP :
+{
+         "/*" : WithinComment
+        |" "
+	|"\t"
+	|"\r"
+	|"\n"
+}
+
+<WithinComment> SKIP :
+{
+  "*/" : DEFAULT
+}
+
+<WithinComment> MORE :
+{
+  <~[]>
+}
+
+
+
+
+TOKEN[IGNORE_CASE] : {
+	
+	<MULTISET: "@ms">
+    | <FIRST_MULTISET: "@ms1">
+	| <SECOND_MULTISET: "@ms2">
+	| <INFENV_MULTISET: "@msInfEnv">
+	| <DEF: "def">
+	| <CALL: "call">
+	| <LET: "let">
+	| <MU: "@mu">
+	| <MEMB_IN: "@min">
+	| <MEMB_OUT: "@mout">
+	| <LOG: "@log">
+	| <COS: "@cos">
+	| <SIN: "@sin"> 
+	| <FLOOR: "@floor">
+	| <MAX0: "@max0">
+	| <CEIL: "@ceil">
+	| <ROUND: "@round">
+	| <DISSOLVES: "@d">
+	| <VARIANT: "@model">
+	| <DEBUG: "@debug">
+	| <MARCS: "@marcs">
+	| <MDICT: "@mdict">
+	| <MINST: "@minst">
+	| <MSEQ: "@mseq">
+	| <MASYNCH: "@masynch">
+	| <MVALID: "@mvalid">
+	| <GUARD: "@guard">
+	| <STRING: "\""(~["\""])*"\"">
+	| <ID: (["a"-"z"]|"_")(["a"-"z"]|"_"|["0"-"9"])*>
+	| <DOLLAR: "$">
+	| <QUOTE: "'">
+	| <ARROW: "-->">
+	| <DOUBLE_ARROW: "<-->">
+	| < RELABELLING_ARROW: "|-->" >
+	| < UNLINKING_ARROW: "-!>" >
+	| <DOT:".">
+	| <NATURAL_NUMBER: (["0"-"9"])+>
+	| <NUMBER: ((["0"-"9"])+(<DOT>(["0"-"9"])+)?|<DOT>(["0"-"9"])+)
+		   ("e"(<PLUS>|<MINUS>)?(["0"-"9"])+)?>
+	| <PI: "@pi" >
+	| <EMPTY: "#">
+	| <QUESTION: "?">
+	| <AMPERSAND: "&">
+	| <BAR: "|">
+	| <SEPARATOR: ";">
+	| <LBRACE: "{">
+	| <RBRACE: "}">
+	| <COMMA: ",">
+	| <LSQUARE: "[">
+	| <RSQUARE: "]">
+	| <LPAR: "(">
+	| <RPAR: ")">
+	| <COLON: ":">
+	| <DOUBLE_COLON: <COLON><COLON>>
+	| <PLUS: "+">
+	| <MINUS: "-">
+	| <MUL: "*">
+	| <DIV: "/">
+	| <MOD: "%">
+	| <INTDIV: "//">
+	| <POW: "^">
+	| <ASIG: "=">
+	| <LESS_THAN: "<">
+	| <GREATER_THAN: ">">
+	| <LESS_OR_EQUAL_THAN: "<="|"=<">
+	| <GREATER_OR_EQUAL_THAN: ">="|"=>">
+	| <DIFF: "<>">
+	| <INC: "+=">
+	| <ICL: "*=">
+	| <AND: "&&" >
+	| <OR: "||">
+	| <STRING_OBJECT: <LESS_THAN>(<ID>(<DOT>(<ID>|"?"))*)?<GREATER_THAN>>
+	| <MOUTRES_BINARY: "@moutres_binary">
+	| <MOUTRES_NATURAL: "@moutres_natural">
+	| <MOUTRES_SUMMATORIES: "@moutres_summatories">
+	| <MASTF: "@mastf">
+	| <MASTH: "@masth">
+	| <MASTFUNC: "@mastfunc">
+	| <PROPERTY : "@property">
+	| <DUMMY: "@dummy">
+	| <MBOUNDALL : "@mboundall">
+	| <MLOCSET : "@mlocset">
+	| <FVARIANT: "@fvariant"> 
+	| <FRULE: "@frule">
+	| <FP_IN: "@fpin">
+	| <FP_OUT: "@fpout">
+	| <FAND: "@fand">
+	| <FOR: "@for">
+	| <PARALLEL: "@parallel">
+	| <FWEIGHT: "@fweight">
+
+}
+
+
+private String string0() : {Token varTokenInit,varTokenEnd;String str;}{
+	<STRING>{return token.image.substring(1,token.image.length()-1);}
+	|{varTokenInit=token.next;}str=stringVariable(){varTokenEnd=token;getCurrentEnvironment().getStringVariable(str,varTokenInit,varTokenEnd,nonCheckedVariables);}
+	
+}
+
+private String string() : {String str,str1;}{
+	str=string0()
+	(
+		<PLUS>
+		str1=string0(){if (!getCurrentEnvironment().isSafeMode())str+=str1;}
+	)*
+	{return str;}
+}
+
+
+private String indexes() : {Number n;String result;}{
+	<LBRACE>
+	n=number(){result="{"+n;}
+	(<COMMA>n=number()
+		{if(n!=null)
+      		result += "," + n;
+      	else
+      		result+=","+token.image;
+      	})*
+	<RBRACE>{return result+"}";}
+}
+ 
+
+private String numericVariable() : {String result;String indexes="";}{
+	<ID>{result=token.image;}
+	(indexes=indexes())?
+	{return result+indexes;}
+}
+private String stringVariable() : {String result;}{
+	<DOLLAR>{result=token.image;}<ID>
+	{return result+token.image;}
+}
+
+private Number number0() : {Number n;boolean neg=false;String var;Token varTokenInit,varTokenEnd;}{
+	
+	(<PLUS>|<MINUS>{neg=true;})?
+	((<NUMBER>|<NATURAL_NUMBER>){n = getNumber(Double.parseDouble(token.image));}
+	| (<PI>){n = getNumber(Math.PI);} /* La idea sería expandir esto para que se pudiese usar con todas las posibles constantes */
+	|{varTokenInit=token.next;}var=numericVariable(){varTokenEnd=token;
+      n = getCurrentEnvironment().getNumericVariable(var, varTokenInit, varTokenEnd, nonCheckedVariables);}
+	|<LPAR>n=number()<RPAR>)
+	{
+		if (neg && n!=null)
+			return getNumber(-n.doubleValue());
+		else
+			return n;
+	}
+}
+
+private Number number01() : {Number n;Stack<Integer> op= new Stack<Integer>();}
+{
+  (<LOG>{op.push(1);}|<CEIL>{op.push(2);}|<FLOOR>{op.push(3);}|<MAX0>{op.push(4);}|<ROUND>{op.push(5);}|<COS>{op.push(6);}|<SIN>{op.push(7);})*
+  n=number0()
+  {
+    if (getCurrentEnvironment().isSafeMode())
+    {
+    	n=null;
+    	op=null;
+    }
+    else
+    {
+    	while(!op.isEmpty())
+    	{checkStopped();
+    		switch(op.pop())
+    		{
+    	  		case 1: /* Logaritmo en base 2 */
+    	   			n = getNumber(Math.log(n.doubleValue())/Math.log(2));
+    	   		break;
+    	  		case 2: /* Parte entera por exceso */
+    	   			n= getNumber(Math.ceil(n.doubleValue()));
+    	   		break;
+    	  		case 3: /* Parte entera por defecto */
+    	   			n= getNumber(Math.floor(n.doubleValue()));
+    	   		break; 
+    	  		case 4: /* Maximo entre un numero y cero */
+    	   			if(n.doubleValue() < 0)
+    	   				n = getNumber(0.0);
+    	   			else
+    	   			   n = getNumber(n.doubleValue());
+    	   		case 5: /* Redondeo */
+    	   			n= getNumber(Math.round(n.doubleValue()));
+    	   		case 6: /* Coseno */
+    	   			n = getNumber(Math.cos(n.doubleValue()));
+    	   		case 7: /* Seno */
+    	   			n = getNumber(Math.sin(n.doubleValue()));
+    	   		break;   		 
+    		}
+    	}
+    }
+    
+  	return n;
+  }
+
+}
+
+private Number number1() : {Number n1,n2;}{
+	n1=number01()
+	(
+	<POW>
+	n2=number01()
+	{
+		n1 = getCurrentEnvironment().isSafeMode()?null:getNumber(Math.pow(n1.doubleValue(),n2.doubleValue()));
+	}
+	)*
+	{return n1;}
+}
+
+
+private Number number2() : {Number n1,n2;int op;}{
+	n1=number1()
+	(
+	(<MUL>{op=1;}|<DIV>{op=2;}|<MOD>{op=3;}|<INTDIV>{op=4;})
+	n2=number1()
+	{
+		switch (op)
+		{
+			case 1:
+				n1 = getCurrentEnvironment().isSafeMode()?null:getNumber(n1.doubleValue()*n2.doubleValue());
+			break;
+			case 2:
+				n1 = getCurrentEnvironment().isSafeMode()?null:getNumber(n1.doubleValue()/n2.doubleValue());
+			break;
+			case 3:
+				n1 = getCurrentEnvironment().isSafeMode()?null:getNumber(n1.doubleValue()%n2.doubleValue());
+			break;
+			case 4:
+				n1 = getCurrentEnvironment().isSafeMode()?null:getNumber((long)(n1.doubleValue()/n2.doubleValue()));
+			break;
+		}
+	}
+	)*
+	{return n1;}
+}
+
+private Number number() : {Number n1,n2;int op;}{
+	n1=number2()
+	(
+	(<PLUS>{op=1;}|<MINUS>{op=2;})
+	n2=number2()
+	{
+		switch (op)
+		{
+			case 1:
+				n1 = getCurrentEnvironment().isSafeMode()?null:getNumber(n1.doubleValue()+n2.doubleValue());
+			break;
+			case 2:
+				n1 = getCurrentEnvironment().isSafeMode()?null:getNumber(n1.doubleValue()-n2.doubleValue());
+			break;
+		}
+	}
+	)*
+	{return n1;}
+}
+
+
+
+
+private String object() : {String name,var;Token varTokenInit,varTokenEnd;Number n;String indexes="";} {
+	((<ID>{name=token.image;}
+	|{varTokenInit=token.next;}var=stringVariable(){varTokenEnd=token;name = getCurrentEnvironment().getStringVariable(var, varTokenInit, varTokenEnd, nonCheckedVariables);})
+	(indexes=indexes())?
+	{return name+indexes;})
+	|<STRING_OBJECT>{return token.image;}
+}
+
+
+
+
+private void variantDef() : 
+{
+	String errorMsg="";
+	String model="";
+}
+{
+	<VARIANT>
+	<STRING_OBJECT>
+	{
+		model= token.image.substring(1,token.image.length()-1);
+		try
+		{
+			  checkStopped();
+			Iterator<String>it=AbstractPsystemFactory.getModelsInfo().getModelsIterator();
+			errorMsg="Was expecting one of these models:\n";
+			while(it.hasNext())
+			{
+			  checkStopped();
+				errorMsg+="    * "+it.next();
+				if (it.hasNext())
+					errorMsg+="\n";
+			}
+
+			setPsystem(AbstractPsystemFactory.createAbstractPsystemFactory(model).createPsystem());
+			writeInfo("Model = "+model,4);
+				
+		}
+		catch(Exception ex)
+		{
+			throwSemanticsException(ex.getMessage(),token,token,errorMsg);
+		}
+	}
+	
+	
+}
+
+
+
+private void param(List<String> params) : {String str;Token paramTokenInit,paramTokenEnd;}{
+	{paramTokenInit=token.next;}
+	(str=stringVariable()|str=numericVariable())
+	{
+		paramTokenEnd=token;
+		if (params.contains(str))
+			throwSemanticsException("Repeated parameter '"+str+"'",paramTokenInit,paramTokenEnd);
+		params.add(str);
+	}
+}
+
+private void moduleBody() : {}{
+
+	(sentence())*
+}
+
+
+
+
+
+private void moduleDef() : {Token moduleNameToken;Token moduleBodyToken;List<String>parameters=new ArrayList<String>();}{
+
+	<DEF><ID>{moduleNameToken=token;}
+	<LPAR>
+	(param(parameters)(<COMMA>param(parameters))*)?
+	<RPAR>
+	<LBRACE>{moduleBodyToken=token;}	
+	{
+		int counter=1;
+		Token t=token,t1;
+		do{checkStopped();
+			t1=t;
+			t=getNextToken();
+			if (t.kind==LBRACE) counter ++;
+			if (t.kind==RBRACE) counter --;
+			if (t.kind==EOF)
+			{
+				int expected[][]= new int[1][1];
+				expected[0][0] = RBRACE;
+				throw new ParseException(t1,expected,tokenImage);
+			}
+		}while(counter!=0 && t.kind!=EOF);
+		addModule(moduleNameToken,moduleBodyToken,parameters);
+		
+	}
+}
+
+
+
+private void parameterValue(List parameterValues) : {Number n;String str;}{
+	n=number(){if (!getCurrentEnvironment().isSafeMode())parameterValues.add(n);}
+	|str=string(){if (!getCurrentEnvironment().isSafeMode())parameterValues.add(str);}
+}
+
+private void moduleCall() : {Token callToken;List parameterValues=new ArrayList();}{
+
+	<CALL><ID>{callToken=token;}(<LPAR>(parameterValue(parameterValues)(<COMMA>parameterValue(parameterValues))*)?<RPAR>)?
+	{if (!getCurrentEnvironment().isSafeMode()) doCall(callToken.image,callToken,parameterValues);}
+
+}
+
+
+
+
+
+private void multiObject(MultiSet<String> ms) : {String o;Number mul=1;Token beginObjToken,endObjToken;}{
+	
+	{
+		beginObjToken=token.next;
+	}
+	o=object()(<MUL>mul=number0())?
+	{
+		endObjToken=token;
+		try
+		{
+			if (!getCurrentEnvironment().isSafeMode())ms.add(o,mul.longValue());
+		}catch(Exception ex)
+		{
+			throwSemanticsException(ex.getMessage(),beginObjToken,endObjToken);
+		}
+	}
+}
+
+
+private byte charge() : {byte ch=(byte)0;}{
+	(<MINUS>{ch=(byte)-1;}|<PLUS>{ch=(byte)1;})
+	{
+		return ch;
+	}
+}
+
+private String labelString() : {String r="";Number n1=null;Number n2=null;String numberBuffer="";}{
+   	(r=object()
+	|<NATURAL_NUMBER>{r=token.image;}
+	|<LBRACE>n1=number()(< COMMA > n2=number()	{if (!getCurrentEnvironment().isSafeMode())numberBuffer+=","+n2.toString();})*
+	{if (!getCurrentEnvironment().isSafeMode())r=n1.toString()+numberBuffer;}<RBRACE>)
+	{return r;}
+}
+
+private Label label() : {String r1=null,r2=null,r3=null;Label l=null;}{
+	
+	<QUOTE>r1=labelString()
+	(<COMMA>r2=labelString())?
+	(<STRING>{r3= token.image.substring(1,token.image.length()-1);})?
+	
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (r2!=null)
+				l = new Label(r1,r2);
+			else
+				l = new Label(r1);
+			expr=r3;
+		}
+		return l;
+	}
+}
+
+private Label parentLabel(ChangeableMembrane parentMembrane) : {String r1=null,r2=null;Label l=null;Token beginToken,endToken;}{
+	
+	<QUOTE>r1=labelString()
+	{beginToken=token;}
+	(<COMMA>r2=labelString())?
+	{
+		{endToken=token;}
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (parentMembrane!=null && !parentMembrane.getLabelObj().getEnvironmentID().equals(""))
+			{
+				if (r2!=null && !r2.equals(parentMembrane.getLabelObj().getEnvironmentID()))
+					throwSemanticsException("Invalid environment ID",beginToken,endToken);
+				r2=parentMembrane.getLabelObj().getEnvironmentID();
+			}
+			if (r2!=null)
+				l = new Label(r1,r2);
+			else
+				l = new Label(r1);
+		}
+		return l;
+	}
+}
+
+private Label rsquare() : {Label label;}{
+	<RSQUARE>label=label(){return label;}
+}
+
+
+private byte lsquare() : {byte ch=(byte)0;}{
+	(<OR>{ruleType="division";}|<DIV>{ruleType="budding";})?
+	(ch=charge())?<LSQUARE>{return ch;}
+}
+
+private CellLikeSkinMembrane cellLikeSkinMembrane() : {CellLikeMembrane m;}
+{
+	m=cellLikeMembrane(null)
+	{
+		return (CellLikeSkinMembrane)m;
+	}
+}
+
+private InnerRuleMembrane innerRuleMembrane() :
+{
+	byte ch;
+	Label label;
+	MultiSet<String> ms = new HashMultiSet<String>();
+}
+{
+	ch=lsquare()
+	(rangedMultiSet(ms))?
+	label=rsquare()
+	{return getCurrentEnvironment().isSafeMode()?null:new InnerRuleMembrane(label,ch,ms);}
+}
+
+
+private OuterRuleMembrane secondRightOuterRuleMembrane(Label label) : 
+{
+	byte ch;
+	List<InnerRuleMembrane> l = new ArrayList<InnerRuleMembrane>();
+	MultiSet<String> ms = new HashMultiSet<String>();
+	String obj;
+	InnerRuleMembrane im;
+	
+	
+}
+{
+	ch=lsquare()
+	(rangedMultiSet(ms))?
+	(im=innerRuleMembrane(){if (!getCurrentEnvironment().isSafeMode())l.add(im);})*
+	<RSQUARE>
+	(label=label())?
+	{return getCurrentEnvironment().isSafeMode()?null:new OuterRuleMembrane(label,ch,ms,l);}
+	
+}
+
+private OuterRuleMembraneWithDissolutionOption firstRightOuterRuleMembrane(Label label) :
+{
+	byte ch;
+	List<InnerRuleMembrane> l = new ArrayList<InnerRuleMembrane>();
+	MultiSet<String> ms = new HashMultiSet<String>();
+	InnerRuleMembrane im;
+	boolean dissolves=false;
+}
+{
+	ch=lsquare()
+	(dissolves=rangedMultiSetWithDissolutionOption(ms))?
+	(im=innerRuleMembrane(){if (!getCurrentEnvironment().isSafeMode())l.add(im);})*
+	<RSQUARE>
+	(label=label())?
+	{return getCurrentEnvironment().isSafeMode()?null:new OuterRuleMembraneWithDissolutionOption(label,ch,ms,l,dissolves);}
+}
+
+private boolean rangedMultiSetWithDissolutionOption(MultiSet < String > ms) :
+{
+  boolean dissolves = false;
+  Stack<Token > ranges = new Stack<Token >();
+  List<Range > rangeList = new LinkedList<Range >();
+  Token initToken, endToken;
+}
+{
+  dissolves = multiSetWithDissolutionOption(ms)
+  {
+    return dissolves;
+  }
+| < AMPERSAND > < LBRACE > dissolves = multiSetWithDissolutionOption(ms) < RBRACE > < COLON >
+
+  {
+    initToken = token;
+  }
+  < LBRACE >
+  (
+    rangeSequence(ranges, rangeList)
+  )
+  < RBRACE >
+  {
+    endToken = token;
+  }
+  {
+  	
+	try
+	{
+		ObjectRangeExpander.expandObject(ms, rangeList, ranges, getCurrentEnvironment(), nonCheckedVariables);
+	}
+	catch (ObjectRangeException ore)
+	{
+	  throwSemanticsException("Only simple variables allowed in the iterator. \nNot permitted use of parameters based on iterators of this type.",initToken,endToken);
+		//throwSemanticsException("Illegal operation. The use of parameters depending on the iteration variable is not allowed. Only the use of the variable itself is permitted!",token,token);
+  	}
+  }
+  {
+    return dissolves;
+  }
+}
+
+private List<InnerRuleMembrane> innerRuleMembranes() :
+{
+	List<InnerRuleMembrane> l = new ArrayList<InnerRuleMembrane>();
+	InnerRuleMembrane im;
+}
+{
+	(im=innerRuleMembrane(){if (!getCurrentEnvironment().isSafeMode())l.add(im);})*
+	{return l;}
+}
+
+
+private OuterRuleMembrane outerRuleMembrane() :
+{
+	byte ch;
+	Label label;
+	List<InnerRuleMembrane> l;
+	MultiSet<String> ms = new HashMultiSet<String>();
+	
+}
+{
+	ch=lsquare()
+	(multiSet(ms))?
+	l=innerRuleMembranes()
+	label=rsquare()
+	{return getCurrentEnvironment().isSafeMode()?null:new OuterRuleMembrane(label,ch,ms,l);}
+	
+}
+
+
+
+private CellLikeMembrane cellLikeMembrane(CellLikeMembrane parentMembrane) : 
+{
+	Label label;
+ 	byte ch;
+	Token initToken,init=null,end=null;
+	CellLikeMembrane m=null;
+	MultiSet<String> ms = new HashMultiSet<String>();
+}
+{
+	ch=lsquare()
+	{
+		initToken=token;
+		int counter=1;
+		Token t=token,t1;
+		do{checkStopped();
+			t1=t;
+			t=getNextToken();
+			if (t.kind==LSQUARE) counter ++;
+			if (t.kind==RSQUARE) counter --;
+			if (t.kind==EOF || t.kind==SEPARATOR)
+			{
+				int expected[][]= new int[1][1];
+				expected[0][0] = RSQUARE;
+				if (t.kind==SEPARATOR) token=t1;
+				throw new ParseException(t1,expected,tokenImage);
+			}
+			
+		}while(counter!=0 && t.kind!=EOF && t.kind!=SEPARATOR);
+	}
+	{init=token;}
+	label=parentLabel(parentMembrane)
+	{end=token;}
+	{
+		token=initToken;
+		jj_ntk=-1;
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			m = CellLikeMembraneFactory.getCellLikeMembrane(label,parentMembrane);
+			m.setCharge(ch);
+			ms=m.getMultiSet();
+
+			if(parentMembrane == null)	// then is a SkinMembrane
+				((CellLikeSkinMembrane)m).setPsystem(getPsystem());
+		}
+		
+	}
+	(multiSet(ms))?
+	(cellLikeMembrane(m))*
+	rsquare()
+	(label())?	
+	{
+	      if (!getCurrentEnvironment().isSafeMode() && !label.getEnvironmentID().equals("")) 
+			addMembrane(label.getLabelID(),label.getEnvironmentID(),m,init,end);
+    		
+	return m;
+	}
+
+	
+}
+
+
+private boolean multiSetWithDissolutionOption(MultiSet<String> ms) : 
+{
+	boolean dissolves=false;
+}
+{
+	
+	((multiObject(ms)|<DISSOLVES>{dissolves=true;})
+
+	(<COMMA>(multiObject(ms)|<DISSOLVES>{dissolves=true;}))*
+	
+	|<EMPTY>(<COMMA><DISSOLVES>{dissolves=true;})?)
+	{return dissolves;}
+	
+
+}
+
+private void Set(Set < String > set) :
+{String o="";
+Token beginObjToken=token.next;
+}
+{
+(o=object()
+{set.add(o);}
+(<COMMA>o=object()
+{set.add(o);})*)
+	|<EMPTY>
+	{
+		Token endObjToken=token;
+		try
+		{
+			if (!getCurrentEnvironment().isSafeMode())set.add(o);
+		}catch(Exception ex)
+		{
+			throwSemanticsException(ex.getMessage(),beginObjToken,endObjToken);
+		}
+	}
+}
+
+
+
+private void rangedSet(Set < String > set) :
+{
+  Stack<Token > ranges = new Stack<Token >();
+  List<Range > rangeList = new LinkedList<Range >();
+  Token initToken, endToken;
+
+}
+{
+  (
+   
+  < AMPERSAND > < LBRACE > Set(set) < RBRACE > < COLON >
+
+  {
+    initToken = token;
+  }
+  < LBRACE >
+
+  rangeSequence(ranges, rangeList)
+  
+  < RBRACE >
+  {
+    endToken = token;
+  }
+  {
+	try
+	{
+		ObjectRangeExpander.expandObject(set, rangeList, ranges, getCurrentEnvironment(), nonCheckedVariables);
+	}
+	catch (ObjectRangeException ore)
+	{
+	  throwSemanticsException("Only simple variables allowed in the iterator. \nNot permitted use of parameters based on iterators of this type.",initToken,endToken);
+		//throwSemanticsException("Illegal operation. The use of parameters depending on the iteration variable is not allowed. Only the use of the variable itself is permitted!",token,token);
+  	}
+		
+  }
+
+  )
+| Set(set)
+}
+
+
+
+private void rangedMultiSet(MultiSet < String > ms) :
+{
+  Stack<Token > ranges = new Stack<Token >();
+  List<Range > rangeList = new LinkedList<Range >();
+  Token initToken, endToken;
+
+}
+{
+  (
+   
+  < AMPERSAND > < LBRACE > multiSet(ms) < RBRACE > < COLON >
+
+  {
+    initToken = token;
+  }
+  < LBRACE >
+
+  rangeSequence(ranges, rangeList)
+  
+  < RBRACE >
+  {
+    endToken = token;
+  }
+  {
+	try
+	{
+		ObjectRangeExpander.expandObject(ms, rangeList, ranges, getCurrentEnvironment(), nonCheckedVariables);
+	}
+	catch (ObjectRangeException ore)
+	{
+	  throwSemanticsException("Only simple variables allowed in the iterator. \nNot permitted use of parameters based on iterators of this type.",initToken,endToken);
+		//throwSemanticsException("Illegal operation. The use of parameters depending on the iteration variable is not allowed. Only the use of the variable itself is permitted!",token,token);
+  	}
+		
+  }
+
+  )
+| multiSet(ms)
+}
+
+private void multiSet(MultiSet<String> ms) : {}{
+	(multiObject(ms)(<COMMA>multiObject(ms))*)
+	{
+
+		if(isSpikingPsystem())
+		{
+			if(ms.entrySet().size() > 1)
+				throwSemanticsException("Only one kind of objects are allowed",token,token);
+
+			if(ms.entrySet().size() == 1)
+				if(!(ms.entrySet().contains(SpikingConstants.spikeSymbol) || ms.entrySet().contains(SpikingConstants.antiSpikeSymbol)))
+					throwSemanticsException("Only spikes or anti-spikes are allowed",token,token);  
+		}
+	}
+
+	|<EMPTY>
+}
+
+
+private void multiSetAsig() : {MultiSet ms=new HashMultiSet<String>();boolean inc=false;String label="";String id=null;Token init=null,end=null;}{
+	<MULTISET><LPAR>{init=token;}label=labelString()(<COMMA>id=labelString())? {end=token;}<RPAR> (<INC>{inc=true;}|<ASIG>) multiSet(ms)
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (id==null)
+			{
+				if (!inc || !getPsystem().getInitialMultiSets().containsKey(label))
+					getPsystem().getInitialMultiSets().put(label,ms);
+				else		
+				{
+					MultiSet ms1=getPsystem().getInitialMultiSets().get(label);
+					ms1.addAll(ms);
+				}
+			}
+			else
+			{
+				addMultiSet(label,id,ms,inc,init,end);				
+			}
+		}
+	}
+}
+
+private void labelsList() : {String label;}
+{
+	label=labelString()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem() && !isFuzzyPsystem() && !isTissuePsystem())
+				throwSemanticsException("Invalid initial configuration",token,token);
+			else
+			{
+				if(isSpikingPsystem())
+				{  
+					SpikingMembrane.buildMembrane
+					(label,0L,(SpikingMembraneStructure)getPsystem().getMembraneStructure(),computeEfficiencyAttributes);
+				}
+				else if(isFuzzyPsystem())
+				{
+					List<Float> value = new ArrayList<Float>();
+					FuzzyMembraneStructure struct = (FuzzyMembraneStructure)getPsystem().getMembraneStructure();
+	
+					if(isRealFuzzyValue())
+					{	
+						value.add(0.0f);
+	
+						PropositionNeuron.buildMembrane
+						(label,value,struct);
+						  
+					}
+					else if(isTrapezoidalFuzzyValue())
+					{
+	
+ 						for(int i = 0; i < 4; i++)
+ 							value.add(0.0f);
+	
+						PropositionNeuron.buildMembrane
+						(label,value,struct);
+	
+					}
+					else
+						throwSemanticsException("Fuzzy value type not initialized",token,token);
+				}
+				else if(isTissuePsystem())
+				{  
+					TissueLikeMembrane.buildMembrane
+					(label,(TissueLikeMembraneStructure)getPsystem().getMembraneStructure());
+				}
+			}
+		}
+	
+	}
+	(
+		<COMMA>label=labelString()
+		{
+			if (!getCurrentEnvironment().isSafeMode())
+			{
+				if (!isSpikingPsystem() && !isFuzzyPsystem())
+					throwSemanticsException("Invalid initial configuration",token,token);
+				else
+				{
+					if(isSpikingPsystem())
+					{  
+						SpikingMembrane.buildMembrane
+						(label,0L,(SpikingMembraneStructure)getPsystem().getMembraneStructure(),computeEfficiencyAttributes);
+					}
+					else if(isFuzzyPsystem())
+					{
+						List<Float> value = new ArrayList<Float>();
+						FuzzyMembraneStructure struct = (FuzzyMembraneStructure)getPsystem().getMembraneStructure();
+		
+						if(isRealFuzzyValue())
+						{
+							
+							value.add(0.0f);
+		
+							PropositionNeuron.buildMembrane
+							(label,value,struct);
+							  
+						}
+						else if(isTrapezoidalFuzzyValue())
+						{
+		
+							for(int i = 0; i < 4; i++)
+ 								value.add(0.0f);
+		
+							PropositionNeuron.buildMembrane
+							(label,value,struct);
+		
+						}
+						else
+							throwSemanticsException("Fuzzy value type not initialized",token,token);
+					}
+				}
+			}
+		}
+	
+	)*
+}
+
+private void mout() : {}
+{
+
+<MEMB_OUT>
+(<ASIG>|<INC>)
+(mout_element()(<COMMA>mout_element())*)?
+
+}
+
+
+private void mout_element() : {String l;}{
+
+	l=labelString()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+					boolean result = ((SpikingMembraneStructure)getPsystem().getMembraneStructure()).setOutputMembrane(l,false);
+					writeInfo("Setting output membrane: "+l,4);
+
+					if(!result)
+						throw new Exception("Impossible to set the neuron as output - maybe is it an ouput neuron already?");				
+
+				}
+				catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}	
+			}
+		}	
+	}
+}
+
+
+private void min() : {String l;}{
+	<MEMB_IN>
+	<ASIG>
+	l=labelString()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+					((SpikingMembraneStructure)getPsystem().getMembraneStructure()).setInputMembrane(l,false);
+					writeInfo("Setting input membrane: "+l,4);
+					writeInfo("The input sequence needs to be re-defined now",4);
+				}
+				catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}	
+			}
+		}	
+	}
+}
+
+private void mdict() : {}
+{
+
+<MDICT>
+(<ASIG>|<INC>)
+mdict_body()
+
+}
+
+private void mdict_body():{}{  (	mobject_list()|mdict_list())
+
+}
+
+private void mdict_list():{}
+{  (mdict_element()(<COMMA>mdict_element())*)?
+}
+private void mdict_element() : {String l1,l2;}{
+
+	<LPAR>l1=labelString()<COMMA>l2=labelString()<RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem()&&!isSimpleRegenerativePsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+			if(isSpikingPsystem()){
+				try
+				{
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).updateDictionary(l1,l2);
+				writeInfo("Updating dictionary: ("+l1+", "+l2+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+			if(isSimpleRegenerativePsystem()){
+				updateRegenerativeDictionary(l1, l2, token);
+			}
+			}
+		}
+	}
+	
+
+
+}
+
+private void mobject_list():{}
+{
+  (mdict_object()(<COMMA>mdict_object())*)
+
+}
+
+private void mdict_object():{String l1,l2;}
+{
+  <LESS_THAN>l1=object()<COMMA>l2=object()<GREATER_THAN>
+  {
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isNonSimpleRegenerativePsystem())
+			{
+				throwSemanticsException("Link dictionaries only valid for Non-Simple Regenerative P systems",token,token);
+			}
+			else
+			{
+				updateRegenerativeDictionary(l1, l2, token);
+			}
+		}
+	}
+}
+
+private void minst() : {}
+{
+
+<MINST>
+(<ASIG>|<INC>)
+(minst_element()(<COMMA>minst_element())*)?
+
+}
+
+private void minst_element() : {Number a,b;}{
+
+	<LPAR>a=number()<COMMA>b=number()<RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+				if( ( (double) a.longValue() ) != a.doubleValue())
+					throw new Exception("time parameter must can be cast to long");
+
+				if( ( (double) b.longValue() ) != b.doubleValue())
+					throw new Exception("spikes parameter must can be cast to long");
+
+				if(a.longValue() < 1L)
+					throw new Exception("time parameter must be greater or equal than one");
+
+				if(b.longValue() < 0L)
+					throw new Exception("time parameter must be greater or equal than zero");
+
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					getEnvironmentMembrane().getInputSequence().put(a.longValue(),b.longValue());
+				writeInfo("Updating input sequence: ("+a.longValue()+", "+b.longValue()+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private void mseq() : {Number a;}{
+	<MSEQ>
+	<ASIG>
+	a=number()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				
+				if( ( (double) a.longValue() ) != a.doubleValue())
+					throw new Exception("Sequential Mode must can be cast to int");
+
+				if(a.longValue() < 0L || a.longValue() > 5L)
+					throw new Exception("Sequential Mode must be in [0,1,2,3,4,5]");
+	
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					setSequentialMode((int) a.longValue());
+				writeInfo("Updating Sequential Mode: ("+a.longValue()+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private void masynch() : {Number a;}{
+	<MASYNCH>
+	<ASIG>
+	a=number()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				
+				if( ( (double) a.longValue() ) != a.doubleValue())
+					throw new Exception("Asynch Mode must can be cast to int");
+
+				if(a.longValue() < 0L || a.longValue() > 3L)
+					throw new Exception("Asynch Mode must be in [0,1,2,3]");
+	
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					setAsynchMode((int) a.longValue());
+				writeInfo("Updating Asynch Mode: ("+a.longValue()+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private void mvalid() : {}
+{
+
+<MVALID>
+(<ASIG>|<INC>)
+(mvalid_element()(<COMMA>mvalid_element())*)?
+
+}
+
+private void mvalid_element() : {String l;Number n;}{
+
+	<LPAR>l=labelString()<COMMA>n=number()<RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+				if( ( (double) n.longValue() ) != n.doubleValue())
+					throw new Exception("Valid value must can be casted to int");
+
+				if(n.longValue() < 0L)
+					throw new Exception("Valid Configuration Value must greater or equal than zero");
+
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					updateValidConfiguration(l,n.longValue());
+				writeInfo("Updating Valid Configuration: ("+l+", "+n.longValue()+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private void marcs() : {}
+{
+
+<MARCS>
+(<ASIG>|<INC>)
+(marcs_element()(<COMMA>marcs_element())*)?
+
+}
+
+
+private void marcs_element() : {String l1,l2;}{
+
+	<LPAR>l1=labelString()<COMMA>l2=labelString()<RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				boolean result = ((SpikingMembraneStructure)getPsystem().getMembraneStructure()).connect(l1,l2);
+				writeInfo("Connecting arcs: ("+l1+", "+l2+")",4);
+				if(!result)
+				throw new Exception("Impossible to create the arc - maybe the arc exists already?");
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private String func_head() : {String functionName;List<String>parameters=new ArrayList<String>();String result=new String();}{
+
+	<ID>{functionName=token.image;}
+	<LPAR>
+	(param(parameters)(<COMMA>param(parameters))*)?
+	<RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+					
+				int size = parameters.size();
+				
+				int i = 0;
+				
+				String varList = "";
+
+				while(i < size)
+				{checkStopped();
+					String var = parameters.get(i).toLowerCase();
+					
+					int aux = i+1;							
+					String comp = new String("x" + aux);
+					
+					if(!var.equals(comp))
+						throwSemanticsException("Incorrect variable specification",token,token);
+						
+					varList += var;
+					
+					i++;
+					
+					if(i < size)
+						varList += ",";
+					
+				}
+				
+				
+				result = functionName + "(" + varList + ")";
+
+				writeInfo("Reading function name: " + result + "...",4);
+				
+				return result;
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+			
+			return result;
+		}
+		
+		return result;
+	}
+}
+
+private String func_body() : {String aux; String result=new String();}{
+
+	aux=string0()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				result = aux.toLowerCase();
+				
+				return result;
+				
+			}
+			
+			return result;
+		}
+		
+		return result;
+	}
+}
+
+private void mastfunc() : {String name; String body;}
+{
+<MASTFUNC> <ASIG> <LPAR> name=func_head() <COMMA> body=func_body() <RPAR>
+ 
+ 	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+		
+				SpikingMembraneStructure structure = (SpikingMembraneStructure)getPsystem().getMembraneStructure();
+				
+				if(!body.startsWith(name))
+					throw new Exception("the definition of the function must start with the head specified.");
+				
+				structure.addAstrocyteFunction(name,body,name.split(",").length);
+				
+				writeInfo("Adding astrocyte function...",4);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+ 
+}
+
+
+private void mast_functional() : 
+{
+String label; 
+List<Pair<String,String>> lista = new ArrayList<Pair<String,String>>();
+List<Pair<String,String>> listaCtrl = new ArrayList<Pair<String,String>>(); 
+SortedSet<Long> listaTh = new TreeSet<Long>();
+List<String> listaFunc = new ArrayList<String>();
+Number t;
+String r,s; boolean update,cOpFlag;
+}
+
+{
+
+<MASTF> <ASIG> 
+<LPAR>
+label=labelString()<COMMA> 
+list_arcs(lista)<COMMA>
+list_arcs(listaCtrl)<COMMA>
+r=labelString()<COMMA>
+{
+
+  				cOpFlag = false;
+
+  				try
+  				{
+  				  
+				if(r.toLowerCase().equals("true") == true)
+					cOpFlag = true;
+				else if (r.toLowerCase().equals("false") == true)
+					cOpFlag = false;
+				else
+					throw new Exception("The update potential parameter must be boolean");
+				
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+				
+  
+}
+list_thresholds(listaTh)<COMMA>
+list_functions(listaFunc,lista.size(),cOpFlag)<COMMA>
+t=number()<COMMA>
+s=labelString()
+<RPAR>
+
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+				if( ( (double) t.longValue() ) != t.doubleValue())
+					throw new Exception("t must can be cast to long");
+					
+				if(t.longValue() < 0L)
+					throw new Exception("t must be a natural number");					
+			
+				if(s.toLowerCase().equals("true") == true)
+					update = true;
+				else if (s.toLowerCase().equals("false") == true)
+					update = false;
+				else
+					throw new Exception("The update potential parameter must be boolean");
+
+				SpikingMembraneStructure structure = (SpikingMembraneStructure)getPsystem().getMembraneStructure();
+				
+				if(existsBuddingOrDivisionRules)
+					throw new Exception("Can't add a Functional Astrocyte in presence of budding or division rules.");
+				else
+					existsFunctionalAstrocytes = true;
+				
+				Astrocyte ast = new FunctionalAstrocyte(label,lista,listaCtrl,cOpFlag,listaTh,listaFunc,t.longValue(),update,structure);
+				
+				writeInfo("Adding astrocyte...",4);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}
+
+private void mast_hybrid() : {String label; List<Pair<String,String>> lista = new ArrayList<Pair<String,String>>(); Number t;}
+{
+
+<MASTH> <ASIG> 
+<LPAR>
+label=labelString()<COMMA> 
+list_arcs(lista)<COMMA> 
+t=number()
+<RPAR>
+
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+			
+				if( ( (double) t.longValue() ) != t.doubleValue())
+					throw new Exception("t must can be cast to long");
+
+				if(t.longValue() < 0L)
+					throw new Exception("t must be a natural number");
+				
+				SpikingMembraneStructure structure = (SpikingMembraneStructure)getPsystem().getMembraneStructure();
+				
+				Astrocyte ast = new HybridAstrocyte(label,lista,t.longValue(),structure);
+				
+				writeInfo("Adding astrocyte...",4);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}
+
+private void list_arcs(List<Pair<String,String>> list) : {}
+{
+	<LBRACE>(list_arcs_element(list)(<COMMA>list_arcs_element(list))*)?<RBRACE>
+
+
+}
+
+private void list_arcs_element(List<Pair<String,String>> list) : {String l1,l2; Pair<String,String> p;}
+{
+	<LPAR>l1=labelString()<COMMA>l2=labelString()<RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				p = new Pair<String,String>(l1,l2);
+				list.add(p);
+				writeInfo("Building arc: ("+l1+", "+l2+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private void list_thresholds(SortedSet<Long> list) : {}
+{
+
+	<LBRACE>(list_thresholds_element(list)(<COMMA>list_thresholds_element(list))*)?<RBRACE>
+
+}
+
+private void list_thresholds_element(SortedSet<Long> list) : {Number t;}
+{
+		t=number()
+		{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+			
+				if( ( (double) t.longValue() ) != t.doubleValue())
+					throw new Exception("t must can be cast to long");
+
+				if(t.longValue() < 0L)
+					throw new Exception("t must be a natural number");
+
+				if(!list.isEmpty() && t.longValue() <= list.last())
+					throw new Exception("An ordered set of thresholds is required.");
+				
+				writeInfo("Adding threshold...",4);
+
+				list.add(t.longValue());
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}
+
+
+private void list_functions(List<String> list, int size, boolean cOpFlag) : {}
+{
+
+	<LBRACE>(list_functions_element(list,size,cOpFlag)(<COMMA>list_functions_element(list,size,cOpFlag))*)?<RBRACE>
+
+}
+
+private void list_functions_element(List<String> list, int size, boolean cOpFlag) : {String fName;}
+{
+		fName=func_head()
+		{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+			
+				int numParams = fName.split(",").length;
+
+				if(!fName.equals("pol()") && !fName.equals("sub()"))
+				{
+				  
+					if(cOpFlag == true && numParams != 1)
+						throw new Exception("Number of function params must be equal to 1 in this case");
+					else if(cOpFlag == false && size == 1 && numParams != 1)
+						throw new Exception("Number of function params must be equal to 1 in this case");
+					else if (cOpFlag == false && size > 1 && numParams != size - 1)
+						throw new Exception("Number of function params must be equal to arcs number");
+					
+				}
+
+				writeInfo("Adding function...",4);
+				
+				list.add(fName);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}
+
+private void moutres_binary() : {}{
+	<MOUTRES_BINARY>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					setShowBinarySequence(true);
+				writeInfo("Setting Binary Sequence to be shown... ",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+}
+
+private void moutres_summatories() : {}{
+	<MOUTRES_SUMMATORIES>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					setShowSummatories(true);
+				writeInfo("Setting Summatories to be shown... ",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+}
+
+
+private void moutres_natural() : {Number n; String s1,s2;boolean b1,b2;ArrayList array;}{
+	<MOUTRES_NATURAL><LPAR>n=number()<COMMA>s1=labelString()<COMMA>s2=labelString()<RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+				if( ( (double) n.longValue() ) != n.doubleValue())
+					throw new Exception("k must can be cast to long");
+
+				if(n.longValue() < 2L)
+					throw new Exception("k must be greater or equal to two");
+
+				if(s1.toLowerCase().equals("true") == true)
+					b1 = true;
+				else if (s1.toLowerCase().equals("false") == true)
+					b1 = false;
+				else
+					throw new Exception("The strong parameter must be boolean");
+
+				if(s2.toLowerCase().equals("true") == true)
+					b2 = true;
+				else if (s2.toLowerCase().equals("false") == true)
+					b2 = false;
+				else
+					throw new Exception("The alternate parameter must be boolean");
+
+		
+				array = new ArrayList();
+				array.add(n.longValue());
+				array.add(b1);
+				array.add(b2);
+
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					setShowNaturalSequence(array);
+				writeInfo("Setting Natural Sequence to be shown...",4);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+}
+
+private void mboundall() : {Number a;}{
+	<MBOUNDALL>
+	<ASIG>
+	a=number()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				
+				if( ( (double) a.longValue() ) != a.doubleValue())
+					throw new Exception("Bound must can be cast to long");
+
+				if(a.longValue() < 2L )
+					throw new Exception("Bound must be greater or equal than 2");
+	
+				((SpikingMembraneStructure)getPsystem().getMembraneStructure()).
+					setBound((long) a.longValue());
+					
+				writeInfo("Updating Bound: ("+a.longValue()+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private void mlocset(): { Set<Set<String>> set = new HashSet<Set<String>>(); }
+{
+  
+	<MLOCSET> <ASIG> <LBRACE>(loc_set_element(set)(<COMMA>loc_set_element(set))*)?<RBRACE>
+
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+				SpikingMembraneStructure structure = (SpikingMembraneStructure)getPsystem().getMembraneStructure();
+				
+				writeInfo("Adding Loc set...",4);
+
+				structure.setLocAttributesFromSet(set);
+				structure.setAsynchMode(4);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}
+
+private void loc_set_element(Set<Set<String>> set): { Set<String> elementSet = new HashSet<String>(); }
+{
+
+  	<LBRACE>(loc_set_sub_element(elementSet)(<COMMA>loc_set_sub_element(elementSet))*)?<RBRACE>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+					writeInfo("Adding Loc subset...",4);
+
+					set.add(elementSet);
+					
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}
+
+
+private void loc_set_sub_element(Set<String> set) : {String label;}
+{
+		label=labelString()
+		{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isSpikingPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+				SpikingMembraneStructure structure = (SpikingMembraneStructure)getPsystem().getMembraneStructure();
+
+				if(structure.getCellsByLabel(label).isEmpty())
+					throw new Exception("Membrane label not defined in P system");
+				
+				writeInfo("Adding element to Loc subset...",4);
+
+				set.add(label);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}
+
+// Fuzzy rules go here //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private void fvariant() : {Number a;}{
+	<FVARIANT>
+	<ASIG>
+	a=number()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+				
+				if( ( (double) a.longValue() ) != a.doubleValue())
+					throw new Exception("Fuzzy Variant must can be cast to int");
+
+				if(a.longValue() < 0L || a.longValue() > 2L)
+					throw new Exception("Fuzzy Variant must be in [0,1,2]");
+	
+				((FuzzyPsystem)getPsystem()).
+					setSystemType((int) a.longValue());
+				writeInfo("Updating Fuzzy Variant: ("+a.longValue()+")",4);
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+	
+
+
+}
+
+private void fp_in() : {}
+{
+
+<FP_IN>
+(<ASIG>|<INC>)
+fp_in_element()(<COMMA>fp_in_element())*
+
+}
+
+
+private void fp_in_element() : {String l; List<Float> v; }{
+
+	<LPAR>l=labelString() <COMMA> v=fuzzy_value() <RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+					((FuzzyMembraneStructure)getPsystem().getMembraneStructure()).setInputMembrane(l,v,false);
+					writeInfo("Setting input membrane: "+l,4);				
+
+				}
+				catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}	
+			}
+		}	
+	}
+}
+
+
+private void fp_out() : {}
+{
+
+<FP_OUT>
+(<ASIG>|<INC>)
+(fp_out_element()(<COMMA>fp_out_element())*)?
+
+}
+
+
+private void fp_out_element() : {String l;}{
+
+	l=labelString()
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+					((FuzzyMembraneStructure)getPsystem().getMembraneStructure()).setOutputMembrane(l,false);
+					writeInfo("Setting output membrane: "+l,4);				
+
+				}
+				catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}	
+			}
+		}	
+	}
+}
+
+private List<Float> fuzzy_value() : { List<Float> value = new ArrayList<Float>(); Number n1,n2,n3,n4; }
+{	  n1 = number()
+	  {
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else if(!isRealFuzzyValue())
+				throwSemanticsException("NOT a fuzzy system with REAL numbers",token,token);
+			else
+			{
+				try
+				{
+
+				if(n1.floatValue() < 0.0 || n1.floatValue() > 1.0)
+					throw new Exception("real number must be in [0,1]");
+					
+				value.add(n1.floatValue());
+				
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+
+		return value;
+	  } 
+
+	  | <LSQUARE> n1 = number() <COMMA> n2 = number() <COMMA> n3 = number() <COMMA> n4 = number() <RSQUARE>
+
+	  {
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else if(!isTrapezoidalFuzzyValue())
+				throwSemanticsException("NOT a fuzzy system with TRAPEZOIDAL numbers",token,token);				
+			else
+			{
+				try
+				{
+
+				if(n1.floatValue() < 0.0 || n1.floatValue() > 1.0)
+					throw new Exception("trapezoidal component must be a real number in [0,1]");
+
+				if(n2.floatValue() < 0.0 || n2.floatValue() > 1.0)
+					throw new Exception("trapezoidal component must be a real number in [0,1]");
+
+				if(n3.floatValue() < 0.0 || n3.floatValue() > 1.0)
+					throw new Exception("trapezoidal component must be a real number in [0,1]");
+
+				if(n4.floatValue() < 0.0 || n4.floatValue() > 1.0)
+					throw new Exception("trapezoidal component must be a real number in [0,1]");
+				
+				value.add(n1.floatValue());
+				value.add(n2.floatValue());
+				value.add(n3.floatValue());
+				value.add(n4.floatValue());
+				
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+
+		return value;
+	  } 
+
+}
+
+private void frule() : { int caseRule = -1; String label,s1 = null, s2 = null ; List<Integer> list1 = new ArrayList<Integer>(); List<Integer> list2 = new ArrayList<Integer>(); List<Float> value;}
+{
+
+<FRULE> <LPAR> label = labelString() <COMMA> value = fuzzy_value() <COMMA>
+(	LOOKAHEAD(3)
+	
+	s1 = labelString() <COMMA> s2 = labelString()							{ caseRule = 0; }
+
+| 	<FAND> <LPAR> fuzzy_hand(list1) <RPAR> <COMMA> s2 = labelString() 		{ caseRule = 1; }
+
+|  	s1 = labelString()  <COMMA> <LPAR> fuzzy_hand(list2) <RPAR>				{ caseRule = 2; } 
+|   <FOR> <LPAR> fuzzy_hand(list1) <RPAR> <COMMA> s2 = labelString() 		{ caseRule = 3; } 
+
+)
+
+<RPAR>
+
+{	if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+
+				if(caseRule < 0)
+					throw new Exception("not a valid rule");
+
+				FuzzyMembraneStructure struct = (FuzzyMembraneStructure) getPsystem().getMembraneStructure();
+
+				if(caseRule == 0)
+				{
+					List<FuzzyMembrane> flist1 =  struct.getCellsByLabel(s1);
+
+					if(flist1.size() != 1 || !(flist1.get(0) instanceof PropositionNeuron))
+						throw new Exception("Left part of the rule is not a Proposition Neuron");
+
+					List<FuzzyMembrane> flist2 =  struct.getCellsByLabel(s2);
+
+					if(flist2.size() != 1 || !(flist2.get(0) instanceof PropositionNeuron))
+						throw new Exception("Right part of the rule is not a Proposition Neuron");
+					
+					int id1 = ((FuzzyMembrane) flist1.get(0)).getId();
+
+					int id2 = ((FuzzyMembrane) flist2.get(0)).getId();
+
+					if(id1 == id2)
+						throw new Exception("Left part and right part of the rule cannot be the same Proposition Neuron");
+
+					list1.add(id1);
+					list2.add(id2);
+					
+					RuleNeuron.buildMembrane
+					(label,value,list1,list2,caseRule,struct);
+
+					writeInfo("Adding rule: "+label,4);	
+				}
+				else if(caseRule == 1 || caseRule == 3)
+				{
+					// list1 is ready
+
+					// gotta check s2
+
+					List<FuzzyMembrane> flist2 =  struct.getCellsByLabel(s2);
+
+					if(flist2.size() != 1 || !(flist2.get(0) instanceof PropositionNeuron))
+						throw new Exception("Right part of the rule is not a Proposition Neuron");
+
+					int id2 = ((FuzzyMembrane) flist2.get(0)).getId();
+
+					if(list1.contains(id2))
+						throw new Exception("Left part and right part of the rule cannot share the same Proposition Neurons");
+
+					list2.add(id2);
+
+					RuleNeuron.buildMembrane
+					(label,value,list1,list2,caseRule,struct);
+
+					writeInfo("Adding rule: "+label,4);
+
+				}
+				else if(caseRule == 2)
+				{					// list2 is ready
+
+					// gotta check s1
+
+					List<FuzzyMembrane> flist1 =  struct.getCellsByLabel(s1);
+
+					if(flist1.size() != 1 || !(flist1.get(0) instanceof PropositionNeuron))
+						throw new Exception("Left part of the rule is not a Proposition Neuron");
+
+					int id1 = ((FuzzyMembrane) flist1.get(0)).getId();
+
+					if(list2.contains(id1))
+						throw new Exception("Left part and right part of the rule cannot share the same Proposition Neurons");
+
+					list1.add(id1);
+
+					RuleNeuron.buildMembrane
+					(label,value,list1,list2,caseRule,struct);
+
+					writeInfo("Adding rule: "+label,4);
+
+				}				
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+}
+
+}
+
+private void fuzzy_hand(List<Integer> list) : {}
+{
+
+	fuzzy_hand_element(list)<COMMA>fuzzy_hand_element(list)(<COMMA>fuzzy_hand_element(list))*
+
+}
+
+private void fuzzy_hand_element(List<Integer> list) : {String label;}
+{
+		label=labelString()
+		{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				try
+				{
+					FuzzyMembraneStructure struct = (FuzzyMembraneStructure) getPsystem().getMembraneStructure();
+
+					List<FuzzyMembrane> flist =  struct.getCellsByLabel(label);
+
+					if(flist.size() != 1 || !(flist.get(0) instanceof PropositionNeuron))
+						throw new Exception("Neuron must be a Proposition Neuron");
+
+					int id = ((FuzzyMembrane) flist.get(0)).getId();
+
+					if(list.contains(id))
+						throw new Exception("repetition of Proposition Neurons is not allowed");
+
+					list.add(id);
+
+				}catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}
+			}
+		}
+	}
+
+}  
+
+private void parallel() : {}
+{
+<PARALLEL>
+{
+	if (!getCurrentEnvironment().isSafeMode())
+	{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				FuzzyMembraneStructure struct = (FuzzyMembraneStructure) getPsystem().getMembraneStructure();
+				struct.setExecuteInParallel(true);
+			}
+
+	}
+
+}
+}
+
+private void fweight() : {String left; String right; List<Float> v; }{
+
+	<FWEIGHT> <LPAR>left=labelString() <COMMA> right=labelString() <COMMA> v=fuzzy_value() <RPAR>
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (!isFuzzyPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else if (!isWeightedFuzzyPsystem())
+				throwSemanticsException("NOT a WEIGHTED fuzzy SN P system",token,token);
+			else
+			{
+				try
+				{
+					((FuzzyMembraneStructure)getPsystem().getMembraneStructure()).addWeight(left,right,v);
+					writeInfo("Adding weight: "+left+","+right+","+v,4);				
+
+				}
+				catch(Exception ex)
+				{
+					throwSemanticsException(ex.getMessage(),token,token);
+				}	
+			}
+		}	
+	}
+}
+
+// Fuzzy rules end here //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+private void membraneStructureIncrement():
+
+{
+   
+	Stack<Token>ranges=new Stack<Token>();
+   ChangeableMembrane membrane=null;
+	Token sentenceToken;
+	OuterRuleMembrane orm;
+  Token init, end;
+  String label=null, id=null; 
+}
+{
+ 
+	 	< LPAR >
+	   {
+	     init = token;
+	   }
+	   (label = labelString())
+	   (
+		< COMMA > id = labelString()
+		   )?
+		   {
+		     end = token;
+		   }
+		< RPAR >
+		{
+		  	if(!getCurrentEnvironment().isSafeMode())
+		  	{
+			    Label labelObject;
+			    if(id!=null)
+			  		labelObject = new Label(label, id);
+			  	else
+			  		labelObject = new Label(label);
+			  	membrane = EnvironmentAdder.lookForMembrane(getPsystem().getMembraneStructure(),labelObject);
+			}
+		}
+	
+     (
+        (
+          < INC >
+{
+    if(!(getPsystem().getMembraneStructure() instanceof CellLikeSkinMembrane))
+    	throwSemanticsException("+= increment is only allowed for Cell-like structures. For other membrane structures, please use *=");
+  }
+    (
+      cellLikeMembrane((CellLikeMembrane)membrane) 
+
+    ))|
+    ( < ICL >
+      {
+    if(!(getPsystem().getMembraneStructure() instanceof TissueLikeMembraneStructure))
+    	throwSemanticsException("*= increment is only allowed for Tissue-like structures. For other membrane structures, please use +=");
+  	}
+    
+      (
+        orm = outerRuleMembrane()
+        {
+          if(!getCurrentEnvironment().isSafeMode())
+          {
+            TissueLikeMembraneStructure str = (TissueLikeMembraneStructure) getPsystem().getMembraneStructure();
+            
+            if (str instanceof SimpleKernelLikeMembraneStructure)            {              
+				SimpleKernelLikeMembraneStructure structure = (SimpleKernelLikeMembraneStructure) str; 
+              	SimpleKernelLikeMembrane kernelMembrane = SimpleKernelLikeMembraneFactory.getKernelLikeMembrane(orm.getLabel(), orm.getMultiSet(), structure);
+              	if(structure instanceof RegenerativeMembraneStructure)
+              	{
+              	   ((RegenerativeMembraneStructure)structure).disableLinkCheck();
+              	    
+              	}
+              	structure.add(kernelMembrane);
+              	if(structure instanceof RegenerativeMembraneStructure)
+              	{
+              	   ((RegenerativeMembraneStructure)structure).enableLinkCheck();
+              	    
+              	}
+             }
+             else
+             {
+              	TissueLikeMembrane tissueMembrane = TissueLikeMembraneFactory.getTissueLikeMembrane(orm.getLabel(), orm.getMultiSet(), str);
+               str.add(tissueMembrane);             }
+              	
+          }
+          
+        }
+    )
+  ))
+}
+
+
+private void properties():
+{Set<String> propertiedObjects= new HashSet<String>();
+String property="";
+}
+{
+  <PROPERTY> <LPAR > <ID>{property=token.image;}<RPAR > <ASIG> rangedSet(propertiedObjects) 
+  { Psystem psystem = getPsystem();
+
+    if (!getCurrentEnvironment().isSafeMode())
+      {
+    for(String propertiedObject: propertiedObjects)
+    {checkStopped();
+     	 psystem.addProperty(propertiedObject, property);
+      }
+    }
+  }
+  
+}
+
+private void dummyMode():
+{}
+{
+  <DUMMY > <ASIG> <ID>
+  {
+   String mode=token.image;   Psystem psystem = getPsystem();   if(!isProbabilisticGuardedPsystem())
+     	throwSemanticsException("Only probabilistic guarded P systems can define flags");
+    ProbabilisticGuardedPsystem probabilisticGuardedPsystem = (ProbabilisticGuardedPsystem) psystem;    
+  	probabilisticGuardedPsystem.setDummyMode(mode);
+ }}
+        
+
+
+
+private void initConfiguration() :
+{CellLikeSkinMembrane m=null;
+
+	
+	}
+{
+	<MU>
+(
+  membraneStructureIncrement()
+		|
+
+		  (
+	(<ASIG>|<INC>|<ICL>)
+	(
+	 m=cellLikeSkinMembrane()
+	|labelsList()
+	)
+	{
+		if (!getCurrentEnvironment().isSafeMode() && m!=null)
+		{
+				
+			getPsystem().setMembraneStructure(m);
+		}
+		})
+	)
+}
+
+private Number priority() : 
+{
+	Number n;
+}
+{
+	<LPAR>
+	n=number()
+	<RPAR>
+	{return n;}
+}
+
+private void rule() : 
+{
+	MultiSet<String> leftMultiSet=new HashMultiSet<String>();
+	MultiSet<String> rightMultiSet=new HashMultiSet<String>();
+	MultiSet<String> leftOuterRuleMembraneMultiSet=new HashMultiSet<String>();
+	MultiSet<String> rightOuterRuleMembraneMultiSet=new HashMultiSet<String>();
+	List<InnerRuleMembrane> leftInner,rightInner;
+	String errorCauses="";
+	OuterRuleMembraneWithDissolutionOption firstRightOuterRuleMembrane=null;
+	List<OuterRuleMembrane > divisionResultingMembranes = new LinkedList<OuterRuleMembrane >();
+	OuterRuleMembrane leftOuterRuleMembrane=null,secondRightOuterRuleMembrane=null;
+	Number ratio=0,priority=0;	
+	boolean hasPriority=false,hasRatio=false,hasGuard=false;
+	Token beginRuleToken,endRuleToken;
+	IRule r=null;
+	Guard mainGuard=null;
+	byte ch, ruleType=KernelRuleTypes.DIVISION;
+	Label label;
+	boolean dissolves=false,doubleArrow=false, relabelling=false, linking=false, unlinkingArrow=false;
+}
+{
+	{beginRuleToken=token.next;}
+	(<GUARD>	{if(!getPsystem().definesGuards())	
+		throwSemanticsException("Rules in model "+RuleChecker.getModelName(getPsystem())+" cannot define guards");	
+	}	  (mainGuard=guard()|mainGuard=restrictiveGuard()){hasGuard=true;} <QUESTION >)?
+	((priority=priority(){hasPriority=true;})?
+	(rangedMultiSet(leftMultiSet))?
+	ch=lsquare()
+	(rangedMultiSet(leftOuterRuleMembraneMultiSet))?
+	leftInner=innerRuleMembranes()
+	(label=rsquare()
+         (<ARROW>
+         |<DOUBLE_ARROW>{doubleArrow=true;}
+         | <UNLINKING_ARROW >{unlinkingArrow=true;}
+         | <RELABELLING_ARROW>{relabelling=true;})       
+     {if (!getCurrentEnvironment().isSafeMode())firstRightOuterRuleMembrane=new OuterRuleMembraneWithDissolutionOption(label,ch,true);}
+	 (rangedMultiSet(rightMultiSet))?
+	 (
+	   firstRightOuterRuleMembrane=firstRightOuterRuleMembrane(label)
+	 	(secondRightOuterRuleMembrane=rangedMembraneList(label, divisionResultingMembranes))?
+	 	(rangedMultiSet(rightMultiSet))?
+	 )?
+	|<ARROW>
+	 (dissolves=rangedMultiSetWithDissolutionOption(rightOuterRuleMembraneMultiSet))?
+	 rightInner=innerRuleMembranes()
+	 label=rsquare()
+	(<DEBUG>string())?
+{if (!getCurrentEnvironment().isSafeMode())firstRightOuterRuleMembrane=new OuterRuleMembraneWithDissolutionOption(label,ch,rightOuterRuleMembraneMultiSet,rightInner,dissolves);})	
+	
+	(<DOUBLE_COLON>ratio=number(){hasRatio=true;})?
+	)
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			endRuleToken=token;
+			leftOuterRuleMembrane=new OuterRuleMembrane(label,ch,leftOuterRuleMembraneMultiSet,leftInner);
+			LeftHandRule leftHandRule;
+			RightHandRule rightHandRule;
+			if (hasPriority && hasRatio)
+				throwSemanticsException("A rule cannot define a ratio and a priority at once",beginRuleToken,endRuleToken);
+			leftHandRule = new LeftHandRule(leftOuterRuleMembrane,leftMultiSet);
+			if (divisionResultingMembranes.isEmpty())
+				rightHandRule = new RightHandRule(firstRightOuterRuleMembrane,rightMultiSet);
+			else
+				if(isKernelPsystem())
+					rightHandRule = new RightHandRule(firstRightOuterRuleMembrane,divisionResultingMembranes,rightMultiSet);
+				else
+					rightHandRule = new RightHandRule(firstRightOuterRuleMembrane,secondRightOuterRuleMembrane,rightMultiSet);
+			try
+			{
+				AbstractRuleFactory factory=getPsystem().getAbstractPsystemFactory().getRuleFactory();
+				 if (isProbabilisticGuardedPsystem())
+			  {
+			    
+			  	float probability = (float)1.0;
+			  	if(hasRatio) probability = ratio.floatValue();
+				  {
+				    RestrictiveGuard restrictiveGuard = new RestrictiveGuard();
+				    if(hasGuard){
+				      	if(!(mainGuard instanceof  RestrictiveGuard))
+				    			throwSemanticsException("Probabilistic guarded rules can only define restrictive guards",beginRuleToken,endRuleToken);
+				    	restrictiveGuard = (RestrictiveGuard)mainGuard;
+				  	}
+				  	restrictiveGuard.setFlags(((ProbabilisticGuardedPsystem)getPsystem()).getFlags());
+				    
+				    
+				     
+					r = factory.createProbabilisticGuardedRule(
+                                        firstRightOuterRuleMembrane.dissolves(),
+                                        leftHandRule, rightHandRule, restrictiveGuard, ruleType,
+                                        probability);
+				  }
+				if(!RuleChecker.checkProbability(r, probability, beginRuleToken, endRuleToken, this)
+					||!RuleChecker.checkExistingSourceAndDestinationMembrane(r, beginRuleToken, endRuleToken, this))
+				{
+				  	r=null;			
+				}
+								
+				}
+				else if (hasGuard)
+				{
+				  if (isKernelPsystem())
+					{
+					  
+					  if (relabelling)
+						  		ruleType = KernelRuleTypes.DIVISION;
+	  						else if	(doubleArrow)
+								ruleType = KernelRuleTypes.INPUT_OUTPUT;
+	  						else ruleType = KernelRuleTypes.EVOLUTION;
+					  r = factory.createKernelRule(firstRightOuterRuleMembrane
+								.dissolves(), leftHandRule, rightHandRule, mainGuard, ruleType);
+					}
+				}
+
+				else if (hasPriority)				{				  
+					if(!isRegenerativePsystem())					{
+						r = factory.createPriorityRule(firstRightOuterRuleMembrane
+							.dissolves(), leftHandRule, rightHandRule, priority
+							.intValue());
+					}
+				}
+				else if (isSpikingPsystem())
+                                {
+                                	
+                                	if(existsFunctionalAstrocytes && this.ruleType != null && ( this.ruleType.equals("budding") || this.ruleType.equals("division") ))
+                                		throw new Exception("Can't add a budding or division rule in presence of Functional Astrocytes");
+                                	else
+                                		existsBuddingOrDivisionRules = true;
+                                	
+                                	String type=this.ruleType;
+                                	r = SpikingRule.buildRule(leftHandRule, rightHandRule, expr, ratio.longValue(), type,computeEfficiencyAttributes);
+                                	this.ruleType = null;
+                                }
+				else if (hasRatio) {
+					r = factory.createConstantRule(firstRightOuterRuleMembrane
+							.dissolves(), leftHandRule, rightHandRule, ratio
+							.floatValue());
+					
+					if (RuleChecker.matchModelID(getPsystem(), "stochastic") &&
+							!noGeneStringsCheckRule.checkRule(r))
+						r = (IStochasticRule)r;
+					
+					if (RuleChecker.matchModelID(getPsystem(), "probabilistic")) {
+						if (ratio.floatValue() == 0) {
+							writeWarning("Rule ignored: " + r, beginRuleToken,
+									endRuleToken);
+							r = null;
+						}
+					}
+				} else
+				{
+					if (!isKernelPsystem())
+						if (doubleArrow)
+							r = factory.createDoubleCommunicationRule(firstRightOuterRuleMembrane
+								.dissolves(), leftHandRule, rightHandRule);
+					else
+						r = factory.createBasicRule(firstRightOuterRuleMembrane
+							.dissolves(), leftHandRule, rightHandRule);
+					else
+					{
+					  if(doubleArrow)
+					  		ruleType = KernelRuleTypes.INPUT_OUTPUT;
+					  	else if (relabelling)
+					  		ruleType=KernelRuleTypes.DIVISION;
+  						else
+  							ruleType=KernelRuleTypes.EVOLUTION;					  	
+				 		r = factory.createKernelRule(firstRightOuterRuleMembrane
+							.dissolves(), leftHandRule, rightHandRule, mainGuard, ruleType);					  
+					}
+				}
+				if(isRegenerativePsystem())				{					if(secondRightOuterRuleMembrane!=null)					{					  divisionResultingMembranes.clear();
+					  divisionResultingMembranes.add(secondRightOuterRuleMembrane);
+					  rightHandRule=new RightHandRule(rightHandRule.getOuterRuleMembrane(), divisionResultingMembranes, new HashMultiSet<String>());
+						if(relabelling)						{
+						  ruleType=RegenerativeRuleTypes.DIVISION_BYTE;						}else 						{
+						  ruleType=RegenerativeRuleTypes.GEMMATION_BYTE;						} 
+					} else					{
+						if(doubleArrow)							{
+							  ruleType=RegenerativeRuleTypes.BUDDING_BYTE;							} else	{  if(unlinkingArrow)	{
+							  ruleType=RegenerativeRuleTypes.UNLINKING_BYTE;							} else	{			if(relabelling)								{									ruleType=RegenerativeRuleTypes.LINKING_BYTE;
+								} else								{
+								  	ruleType=RegenerativeRuleTypes.COMMUNICATION_BYTE;
+								}
+							}						}
+					}
+					r = factory.createKernelRule(false, leftHandRule, rightHandRule, mainGuard, ruleType);
+					IRegenerativeLikeRule regenerativeRule=(IRegenerativeLikeRule)r;
+					regenerativeRule.setLinkObjects(((RegenerativePsystem)getPsystem()).getLinkObjects());
+					regenerativeRule.setMembraneStructure((SimpleKernelLikeMembraneStructure)getPsystem().getMembraneStructure());
+					if(hasPriority)					{						regenerativeRule.setPriority(priority.intValue());
+					}
+										  
+				}
+
+				if (r != null) {
+				    try  {					
+						if (!getPsystem().getRules().checkRule(r)) {
+							errorCauses = getPsystem().getRules().getCheckRule()
+									.getCausesString();
+							{	throw new Exception("Rule doesn't match the \""
+											+ getPsystem()
+													.getAbstractPsystemFactory()
+													.getModelName()
+											+ "\" specification");
+							}
+						}
+					} catch(NullPointerException e) {
+					  throwSemanticsException("Null pointer exception localized when reporting semantics errors");
+					}
+					try  {
+						if (getPsystem().getRules().contains(r))
+							writeWarning("Repeated rule: " + r, beginRuleToken,
+									endRuleToken);
+						else {
+							r.setRuleId(++ruleCounter);
+							writeInfo("Adding rule: " + r, 4);
+							getPsystem().addRule(r);
+						}
+					} catch(NullPointerException e) {
+					  throwSemanticsException("Null pointer exception localized when reporting warnings");
+					}
+				}
+			}
+			catch(NullPointerException ex)
+			{
+				throwSemanticsException("Null pointer exception localized in the rule parsing code",beginRuleToken,endRuleToken,errorCauses);
+			}	
+			catch(Exception ex)
+			{
+				throwSemanticsException(ex.getMessage(),beginRuleToken,endRuleToken,errorCauses);
+			}		
+		}
+			
+	}
+}
+
+private OuterRuleMembrane rangedMembraneList(Label label, List<OuterRuleMembrane > divisionResultingMembranes):
+{
+  OuterRuleMembrane resultingMembrane;
+  Stack<Token > ranges = new Stack<Token >();
+  List<Range > rangeList = new LinkedList<Range >();
+  Token initToken=null, endToken=null;
+}
+{
+  
+    (
+      resultingMembrane = membraneList(label, divisionResultingMembranes)
+    |
+
+
+      (
+
+    <AMPERSAND>{initToken = token;} <LBRACE> resultingMembrane = membraneList(label, divisionResultingMembranes) <RBRACE> <COLON > {endToken=token;} < LBRACE > rangeSequence(ranges, rangeList) <RBRACE>
+{
+  try  {
+  ObjectRangeExpander.expandMembranes(divisionResultingMembranes,
+			rangeList, ranges,
+			getCurrentEnvironment(),
+			nonCheckedVariables);
+	}
+		catch (ObjectRangeException ore)
+	{
+	  throwSemanticsException("Only simple variables allowed in the iterator. \nNot permitted use of parameters based on iterators of this type.",initToken,endToken);
+	 
+}
+  	catch(CloneNotSupportedException e)
+{
+  	  throwSemanticsException("Errors ocurred while expanding the possible values for a membrane");
+	}
+	
+ }
+))
+
+ 
+{ return resultingMembrane; }
+}
+
+private OuterRuleMembrane membraneList(Label label, List<OuterRuleMembrane > divisionResultingMembranes):
+{
+  OuterRuleMembrane resultingMembrane=null;
+}
+{
+  (resultingMembrane=secondRightOuterRuleMembrane(label)
+	{divisionResultingMembranes.add(resultingMembrane);	}
+	 )+
+	 { return resultingMembrane; }
+}
+
+
+private Guard restrictiveGuard():
+{
+   String o;
+   RestrictiveGuard guard;
+}
+{
+  o=object()
+  {
+    if (!getCurrentEnvironment().isSafeMode())	
+    	return new RestrictiveUnaryUnitGuard(o);
+    else
+    	return new RestrictiveGuard();
+  }
+}
+
+private Guard guard():
+{
+  LogicOperatedGuard logicOperatedGuard = new OrJoinedGuard();
+  Guard auxiliaryGuard;
+}
+{
+  auxiliaryGuard=nonIteratedAndJoinedGuard()
+  {
+    logicOperatedGuard.addGuard(auxiliaryGuard);
+  } (<OR> auxiliaryGuard=nonIteratedAndJoinedGuard(){
+    logicOperatedGuard.addGuard(auxiliaryGuard);
+  })*
+  {
+    return logicOperatedGuard;
+  }
+}
+
+
+
+private Guard andJoinedGuard(LogicOperatedGuard containerGuard):
+{
+  LogicOperatedGuard logicOperatedGuard = new AndJoinedGuard();
+  LogicOperatedGuard auxiliaryGuard;
+  Stack<Token > ranges = new Stack<Token >();
+  List<Range > rangeList = new LinkedList<Range >();
+  Token initToken, endToken;
+  boolean joinByAnd=false;
+}
+{
+	(
+  <AMPERSAND >
+  {joinByAnd=true;}
+		|
+ < BAR >)
+ {initToken=token;}
+< LBRACE > auxiliaryGuard = nonIteratedAndJoinedGuard() <RBRACE> <COLON > {endToken=token;} < LBRACE > rangeSequence(ranges, rangeList) <RBRACE>
+  {
+	try
+	{
+		logicOperatedGuard = ObjectRangeExpander.expandGuard(auxiliaryGuard, rangeList, ranges, getCurrentEnvironment(), nonCheckedVariables,joinByAnd);
+		containerGuard.addGuard(logicOperatedGuard);
+		return logicOperatedGuard;
+	}
+	catch (ObjectRangeException ore)
+	{
+	  throwSemanticsException("Only simple variables allowed in the iterator. \nNot permitted use of parameters based on iterators of this type.",initToken,endToken);
+		//throwSemanticsException("Illegal operation. The use of parameters depending on the iteration variable is not allowed. Only the use of the variable itself is permitted!",token,token);
+  	}
+
+  }
+
+}
+
+
+private void unitaryGuard(LogicOperatedGuard logicOperatedGuard):
+{
+}
+{
+  < LPAR > unitaryGuard(logicOperatedGuard) < RPAR >
+| 
+  unitGuard(logicOperatedGuard)
+
+
+  | andJoinedGuard(logicOperatedGuard)
+
+}
+
+private LogicOperatedGuard nonIteratedAndJoinedGuard():
+{
+  LogicOperatedGuard logicOperatedGuard = new AndJoinedGuard();
+
+
+}
+{
+    
+      
+      unitaryGuard(logicOperatedGuard)
+     (<AND> (unitaryGuard(logicOperatedGuard))
+     )*
+
+    {
+    return logicOperatedGuard;
+  }
+
+
+
+}
+
+private void unitGuard(LogicOperatedGuard guard): {short op, sign; String obj;Number mul=1;Token beginObjToken; Token endObjToken;}
+{  
+	< LBRACE >
+{ beginObjToken = token;
+}
+	op = relational_operator()
+
+	sign = sign()
+	
+	obj = object() (<MUL>mul=number0())?
+
+	< RBRACE >
+	
+	{
+		endObjToken=token;
+		try
+		{
+			if (!getCurrentEnvironment().isSafeMode())
+				guard.addGuard(new UnitGuard(op,sign,obj,mul.longValue()));
+		}catch(Exception ex)
+		{
+			throwSemanticsException(ex.getMessage(),beginObjToken,endObjToken);
+		}
+
+		
+		
+		}
+}
+
+private short relational_operator() : {short op=0;}
+{
+  (<ASIG>
+  {
+    op=ComparationMasks.EQUAL;
+  }
+   | <LESS_THAN>
+  {
+    op=ComparationMasks.LESS_THAN;
+  }
+   | <GREATER_THAN>
+   {
+	op=ComparationMasks.GREATER_THAN;
+   }| <LESS_OR_EQUAL_THAN>
+	{
+	op=ComparationMasks.LESS_OR_EQUAL_THAN;
+   }
+    | <GREATER_OR_EQUAL_THAN>
+	{
+	op=ComparationMasks.GREATER_OR_EQUAL_THAN;
+   }
+     | <DIFF>
+     {
+     op=ComparationMasks.DIFF;
+     })
+  {
+  	return op;
+  }
+}
+
+private short sign() : {short sign=ComparationMasks.PLUS;}
+{
+  (
+	    <PLUS>
+	  |
+	  (
+	    <MINUS>
+	  {sign=ComparationMasks.MINUS;
+	  })
+	)
+  {
+  	return sign;
+  }
+}
+
+private void assignment() : {String var,str;Number n;}{
+	var=stringVariable()<ASIG>str=string(){checkStopped();getCurrentEnvironment().setVariable(var,str);}
+	|var=numericVariable()<ASIG>n=number(){checkStopped();getCurrentEnvironment().setVariable(var,n);}
+}
+
+
+private Range range(Stack < Token > ranges, List<Range > rangeList) :
+{
+  Number n1 = null, n2 = null;
+  boolean op1 = Range.LESS_OR_EQUAL_OPERATION, op2 = Range.LESS_OR_EQUAL_OPERATION, diff = false;
+  String variable = null;
+  Token rangeToken;
+}
+{
+
+  {
+    rangeToken = token;
+  }
+    n1 = number()
+  (
+    < DIFF >
+    {
+      diff = true;
+    }
+  |
+    (
+      < LESS_THAN >
+      {
+        op1 = Range.LESS_OPERATION;
+      }
+    | < LESS_OR_EQUAL_THAN >
+    )
+    < ID >
+    {
+      variable = token.image;
+      if(rangeList!=null)
+      	nonCheckedVariables.add(variable);
+    }
+    (
+      < LESS_THAN >
+      {
+        op2 = Range.LESS_OPERATION;
+      }
+    | < LESS_OR_EQUAL_THAN >
+    )
+  )
+  n2 = number()
+  {
+    return ObjectRangeExpander.processRanges(ranges, rangeList, getCurrentEnvironment(), diff, op1, op2, rangeToken, n1, n2, variable);
+  }
+}
+
+private void rangeSequence(Stack < Token > ranges, List<Range > rangeList) :
+{}
+{
+  range(ranges, rangeList)
+
+  (
+    < COMMA > range(ranges, rangeList)
+  )*
+}
+
+private void sentence() : 
+{
+	Token sentenceToken;
+	Stack<Token>ranges=new Stack<Token>();
+
+}
+{
+	try
+	{
+		{checkStopped();
+			getCurrentEnvironment().incDepthLevel();
+			sentenceToken=token;
+			getCurrentEnvironment().enableSafeMode();
+		}
+		instruction()
+		{
+			getCurrentEnvironment().decDepthLevel();
+		}
+		(< COLON > rangeSequence(ranges, null)) ? < SEPARATOR >
+		{
+			doSentence(ranges,sentenceToken,getCurrentEnvironment(),true);
+		}
+					
+		
+
+	}
+	catch(ParseException ex)
+	{
+		getCurrentEnvironment().enableSafeMode();
+		writeError(ex);
+		Token t;
+		do
+		{checkStopped();
+			 t=getNextToken();
+		}while(t.kind!=SEPARATOR && t.kind!=EOF);	
+	}
+}
+
+
+
+private void instruction() : 
+{
+
+
+}{ 
+
+
+	moduleCall()
+	|<LET>assignment()
+	|properties()
+	|dummyMode()
+	|initConfiguration()
+	|marcs()
+	|mdict()
+	|minst()
+	|mseq()
+	|masynch()
+	|mvalid()
+	|min()
+	|mout()
+	|multiSetAsig()
+	|firstMultiSet()
+	|secondMultiSet()
+	|infEnvMultiSet()
+	|rule()
+	|<LBRACE>(sentence())+<RBRACE>
+	|moutres_binary()
+	|moutres_summatories()
+	|moutres_natural()
+	|mast_hybrid()
+	|mast_functional()
+	|mastfunc()
+	|mboundall()
+	|mlocset()
+	|fvariant()
+	|fp_in()
+	|fp_out()
+	|frule()
+	|parallel()
+	|fweight()
+	
+}
+
+
+
+private void grammar() : {}{
+
+		{
+		  
+		  	checkStopped();
+    		nonCheckedVariables = new HashSet<String >();
+    		getCurrentEnvironment().disableSafeMode();
+    	}
+		variantDef()
+		((<LET>)?assignment()<SEPARATOR>
+		{checkStopped();}
+		|
+		moduleDef()
+		{checkStopped();}
+		)*
+		<EOF>
+		{
+		   if (getPsystem().getAbstractPsystemFactory()==null)
+    			throwSemanticsException("Undefined P system model");
+		   doCall("MAIN");
+		}
+
+		
+	
+}
+
+private void firstMultiSet() : {boolean inc=false; MultiSet<String> ms = new HashMultiSet<String>();}
+{
+	<FIRST_MULTISET>(<INC>{inc=true;}|<ASIG>)multiSet(ms)
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (inc)
+				getPsystem().getFirstMultiSet().addAll(ms);
+			else
+				getPsystem().setFirstMultiSet(ms);
+		}
+	}
+
+}
+
+private void secondMultiSet() : {boolean inc=false; MultiSet<String> ms = new HashMultiSet<String>();}
+{
+	<SECOND_MULTISET>(<INC>{inc=true;}|<ASIG>)multiSet(ms)
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+			if (inc)
+				getPsystem().getSecondMultiSet().addAll(ms);
+			else
+				getPsystem().setSecondMultiSet(ms);
+		}
+	}
+
+}
+
+private void infEnvMultiSet() : {boolean inc=false; MultiSet<String> ms = new HashMultiSet<String>();}
+{
+	<INFENV_MULTISET>(<INC>{inc=true;}|<ASIG>)multiSet(ms)
+	{
+		if (!getCurrentEnvironment().isSafeMode())
+		{
+		  
+			if (!isCellLikeInfEnvPsystem())
+				throwSemanticsException("Invalid sentence",token,token);
+			else
+			{
+				CellLikeInfEnvPsystem infps = (CellLikeInfEnvPsystem)getPsystem();
+				
+				if (inc)
+					infps.getEnvInfMultiSet().addAll(ms);
+				else
+					infps.setEnvInfMultiSet(ms);
+			}
+			
+		}
+	}
+
+}

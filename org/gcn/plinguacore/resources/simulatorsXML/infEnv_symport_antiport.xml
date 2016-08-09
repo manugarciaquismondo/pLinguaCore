@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<simulators>
+	<simulator id="infEnv_symport_antiport_base_simulator"
+		class="org.gcn.plinguacore.simulator.cellLike.infEnv.InfEnvSymportAntiportBaseSimulator"></simulator>
+</simulators>

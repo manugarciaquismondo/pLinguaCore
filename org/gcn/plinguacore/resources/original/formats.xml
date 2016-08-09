@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<formats>
+	<input_formats>
+		<format id="XML"
+			class="org.gcn.plinguacore.parser.input.XML.XMLCellLikeInputParser"
+			option="-XML" extension="xml" />
+		<format id="P-Lingua"
+			class="org.gcn.plinguacore.parser.input.plingua.PlinguaInputParser"
+			option="-PLI" extension="pli" />
+		<format id="KernelBin"
+			class="org.gcn.plinguacore.parser.input.simplekernel.KernelInputParser"
+			option="-KB" extension="kb" />
+		<format id="ProbabilisticGuardedBin"
+			class="org.gcn.plinguacore.parser.input.probabilisticGuarded.ProbabilisticGuardedInputParser"
+			option="-PG" extension="pg" />
+		<format id="ENPSXML"
+			class="org.gcn.plinguacore.parser.input.XML.enps.XMLNumericalInputParser"
+			option="-EXML" extension="xml" />
+	</input_formats>
+	<output_formats>
+		<format id="XML"
+			class="org.gcn.plinguacore.parser.output.XML.XMLCellLikeOutputParser"
+			option="-XML" extension="xml" />
+		<format id="Binary"
+			class="org.gcn.plinguacore.parser.output.binary.BinaryOutputParserFactory"
+			option="-BIN" extension="bin" />
+		<format id="Promela"
+			class="org.gcn.plinguacore.parser.output.promela.PromelaOutputParserFactory"
+			option="-PROM" extension="pml" />
+		<format id="KernelBin"
+			class="org.gcn.plinguacore.parser.output.simplekernel.KernelOutputParser"
+			option="-KB" extension="kb" />
+		<format id="ProbabilisticGuardedBin"
+			class="org.gcn.plinguacore.parser.output.probabilisticGuarded.ProbabilisticGuardedOutputParser"
+			option="-PG" extension="pg" />
+		<format id="ENPSXML"
+			class="org.gcn.plinguacore.parser.output.XML.enps.XMLNumericalOutputParser"
+			option="-EXML" extension="exml" />
+		<format id="PENPSXML"
+			class="org.gcn.plinguacore.parser.output.XML.enps.ParameterizedXMLNumericalOutputParser"
+			option="-PEXML" extension="pexml" />
+		<format id="PGXML"
+			class="org.gcn.plinguacore.parser.output.probabilisticGuarded.xml.ProbabilisticGuardedXMLOutputParser"
+			option="-PGXML" extension="pgxml" />
+	</output_formats>
+</formats>

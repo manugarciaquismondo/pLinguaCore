@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<simulators>
+	<simulator id="scripted"
+		class="org.gcn.plinguacore.simulator.simpleregenerative.SimpleRegenerativeScriptedSimulator"></simulator>
+	<simulator id="regenerative"
+		class="org.gcn.plinguacore.simulator.simpleregenerative.SimpleRegenerativeSimulator"></simulator>
+</simulators>

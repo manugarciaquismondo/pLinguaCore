@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<simulators>
+	<simulator id="simplekernelpromela"
+		class="ecoSim.core.simulator.simplekernel.PromelaSimpleKernelSimulator"></simulator>
+	<simulator id="simplekernel"
+		class="org.gcn.plinguacore.simulator.simplekernel.SimpleKernelSimulator"></simulator>
+	<!-- <simulator id = "simplekernelcuda" class ="org.gcn.plinguacore.simulator.simplekernel.CUDASimpleKernelSimulator"></simulator> -->
+</simulators>

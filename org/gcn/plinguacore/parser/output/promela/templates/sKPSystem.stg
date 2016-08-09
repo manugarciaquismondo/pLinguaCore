@@ -1,0 +1,349 @@
+MainStructure(constants, maxStepCount, symbols, symbolsMapping, procRunner, membraneProcTypes, initialMultiSets) ::= <<
+
+/* Mandatory boundary constants */
+#define MaxInstances 100
+#define MaxLinks 10000 //always MaxInstances^2
+#define MaxObjectInstances 100
+#define MaxGuardComposition 100
+#define MaxSteps <maxStepCount>
+
+/* Other model specific constants if required */
+<constants>
+
+/* constants denoting the execution state of a p system - use the step_complete in verification formulae */
+mtype = {running, step_complete}
+mtype state = running;
+
+/* The alphabet */
+//mapping of symbols to integers so we can use arrays as maps with these as keys instead
+<symbolsMapping>
+
+int step = 0;
+int instanceCount = 0;
+int linksCount = 0;
+
+typedef MInstance {
+	byte type;
+	int x[A_LENGTH] = 0;
+	int x_temp[A_LENGTH] = 0;
+	byte isComputing = false;
+	byte isDissolved = false;
+}
+
+/* A link between the indices corresponding to the membrane instances in the membrane instance array */
+typedef MLink {
+	int m1Index;
+	int m2Index;
+}
+
+/* Membrane instances */
+MInstance ms[MaxInstances];
+/* Membrane links */
+MLink ml[MaxLinks];
+
+/* For each instance we have:
+	- x, the vector of symbols from the alphabet
+	- n is the value (multiplicity) associated with each object
+*/
+
+<MembraneInstancePrint(symbols)>
+
+proctype Log(int instanceIndex) {
+	d_step {
+		/*printf("--------- configuration #%d ----------\n\n", step);*/
+		int i;
+		if
+			:: instanceIndex >= 0 && instanceIndex \< instanceCount -> printInstanceData(instanceIndex);
+			:: instanceIndex == -1 ->
+				for(i: 0 .. instanceCount - 1) {
+					if
+					::	ms[i].isDissolved == false ->
+						printInstanceData(i);
+					::	else -> skip;
+					fi;	
+				}
+			:: else -> skip;
+		fi;
+		/*printf("\n------------------------------------\n\n");*/
+	}
+}
+
+/* Executes a rewrite operation for instance denoted by index "instanceIndex" 
+ * Object communication is considered as a rewrite operation across compartments
+ * OBSOLETE!!!
+ */
+inline doRewrite(src_instanceIndex, tar_instanceIndex, symbol1, n1, symbol2, n2) {
+	d_step {
+		ms[src_instanceIndex].x[symbol1] = ms[src_instanceIndex].x[symbol1] - n1;
+		ms[tar_instanceIndex].x_temp[symbol2] = ms[tar_instanceIndex].x_temp[symbol2] + n2;
+	}
+}
+
+inline doLhs(instanceIndex, symbol, n) {
+	ms[instanceIndex].x[symbol] = ms[instanceIndex].x[symbol] - n;
+}
+
+inline doRhs(instanceIndex, symbol, n) {
+	ms[instanceIndex].x_temp[symbol] = ms[instanceIndex].x_temp[symbol] + n;
+}
+
+inline doReplicate(tar_type, symbol, n) {
+	d_step {
+		int i;
+		for(i: 0 .. instanceCount - 1) {
+			if
+				:: ms[i].type == tar_type -> doRhs(i, symbol, n);
+				:: else -> skip;
+			fi;
+				
+		}
+	}
+}
+
+inline create(instanceIndex, tar_type, childCount) {
+	int i, j, k;
+	for(i: 0 .. childCount - 1) {
+		ms[instanceCount].type = tar_type;
+		for(j: 0 .. A_LENGTH - 1) {
+			ms[instanceCount].x[j] = ms[instanceIndex].x[j];
+		}
+		//all the links subject to the parent membrane are now inherited by the created membranes
+		for(k: 0 .. linksCount - 1) {
+			if
+				:: ml[k].m1Index == instanceIndex || ml[k].m2Index == instanceIndex -> 
+					ml[linksCount].m1Index = instanceCount; ml[linksCount].m2Index = k; linksCount++; 
+				:: else -> skip;
+			fi;
+		}
+		instanceCount++;
+	}
+}
+
+inline divide(instanceIndex, childCount) {
+	//the first membrane remains unchanged in the division process
+	//additional rewriting should be done using the rewrite procedure after the division
+	//for rules which do division and rewriting in one step
+	int i, j, k;
+	for(i: 1 .. childCount - 1) {
+		ms[instanceCount].type = ms[instanceIndex].type;
+		for(j: 0 .. A_LENGTH - 1) {
+			ms[instanceCount].x[j] = ms[instanceIndex].x[j];
+		}
+		//all the links subject to the parent membrane are now inherited by the created membranes
+		for(k: 0 .. linksCount - 1) {
+			if
+				:: ml[k].m1Index == instanceIndex || ml[k].m2Index == instanceIndex -> 
+					ml[linksCount].m1Index = instanceCount; ml[linksCount].m2Index = k; linksCount++; 
+				:: else -> skip;
+			fi;
+		}
+		instanceCount++;
+	}
+}
+
+inline doDissolve(instanceIndex) {
+	//mark the membrane instance located at instanceIndex as dissolved
+	ms[instanceIndex].isDissolved = true;
+}
+
+inline rulesApplied() {
+	for(i: 0 .. instanceCount - 1) {
+		ms[i].isComputing == false;
+	}
+}
+
+inline completeStep() {
+	for(i: 0 .. instanceCount - 1) {
+		for(j: 0 .. A_LENGTH - 1) {
+			ms[i].x[j] = ms[i].x[j] + ms[i].x_temp[j];
+			ms[i].x_temp[j] = 0;
+		}
+	}
+}
+
+proctype Scheduler() {
+	int i, j = 0;
+	int instanceCountAux;
+	do
+	:: (step \< MaxSteps) ->
+		state = running;
+		instanceCountAux = instanceCount - 1;
+		<procRunner>
+		rulesApplied();
+		completeStep();
+		/*printf("--------- Step %d complete! ----------\n\n", step);*/
+		state = step_complete;
+		step++;
+		run Log(-1);
+	:: else -> break;
+	od;
+	
+	//run Log(-1);
+}
+
+<membraneProcTypes; separator="\n\n">
+
+init {
+	<initialMultiSets>
+	
+	//run Log(-1);
+	
+	run Scheduler();
+}
+>>
+
+SymbolsMapping(symbols, indices, symbolCount) ::= <<
+<symbols, indices:{symbol, index | #define @<symbol> <index>}; separator="\n">
+#define A_LENGTH <symbolCount>
+>>
+
+ProcRunner(membraneTypes, membraneLabels) ::= <<
+for(i : 0 .. instanceCountAux) {
+	if
+	<membraneTypes, membraneLabels:{type, label | :: (ms[i].isDissolved == false && ms[i].type == <type>) -> run M<label>(i);<\n>}>	:: else -> skip;
+	fi;
+}
+>>
+
+InitialMultiSets(indices, membraneTypes, symbolsList, countsList, instanceCount) ::= <<
+<indices, membraneTypes, symbolsList, countsList:{index, membraneType, symbols, counts | 
+<InitialMultiSet(index, membraneType, symbols, counts)>
+}; separator="\n">
+instanceCount = <instanceCount>;
+>>
+
+InitialMultiSet(index, membraneType, symbols, counts) ::= <<
+/* Instance <index> */
+ms[<index>].type = <membraneType>;
+<symbols, counts:{symbol, count | ms[<index>].x[@<symbol>] = <count>;}; separator="\n">
+>>
+
+MembraneProcType(label, guardComputations, rewritingAndCommRules, divisionRules) ::= <<
+proctype M<label>(int instanceIndex) {
+	
+	ms[instanceIndex].isComputing = true;
+	
+	<guardComputations>
+	
+	<rewritingAndCommRules>
+	
+	<divisionRules>
+		
+	ms[instanceIndex].isComputing = false;
+}
+>>
+
+GuardComputations(ruleIndices, guardEvals, guardIfs) ::= <<
+/* Guard Evaluations */
+byte <ruleIndices:{index | r<index>}; separator=", ">;
+<ruleIndices, guardIfs:{index, guardIf | r<index> = <if(guardIf)>false<else>true<endif>;}; separator=" ">
+<guardEvals, guardIfs, ruleIndices:{guardEval, guardIf, index |
+<if(guardIf)>
+if
+::	(<guardEval>) -> r<index> = true;
+::	else -> skip;
+fi;
+<endif>
+}>
+>>
+
+RewritingAndCommRules(ruleIndices, ruleLhsList, ruleRhsList) ::= <<
+/* Rewriting and Communication Rules */
+do<ruleIndices, ruleLhsList, ruleRhsList:{index, ruleLhs, ruleRhs |
+:: (r<index><ruleLhs>) ->
+	<ruleRhs; separator = "\n">
+}>:: else -> break;
+od;
+>>
+
+DivisionRules(ruleIndices, ruleLhsList, ruleRhsList) ::= <<
+/* Division Rules */
+if<ruleIndices, ruleLhsList, ruleRhsList:{index, ruleLhs, ruleRhs |
+:: (r<index><ruleLhs>) ->
+	<ruleRhs; separator = "\n">
+}>:: else -> skip;
+fi;
+>>
+
+RuleLhs(symbols, counts) ::= "<symbols, counts:{symbol, count | <\ >&& <SymbolMultiplicityCheck(symbol, count)>}>"
+
+RuleRhs(symbols, counts) ::= "<symbols, counts:{symbol, count | <Rhs(symbol, count)>}; separator=\"\n\">"
+
+RuleRewAndCommRhs(lhsSymbols, lhsCounts, rhsRewSymbols, rhsRewCounts, rhsCommMembraneTypes, rhsCommSymbols, rhsCommCounts) ::= <<
+	d_step {
+		<lhsSymbols, lhsCounts:{symbol, count | <Lhs(symbol, count)>}; separator="\n">
+		<rhsRewSymbols, rhsRewCounts:{symbol, count | <Rhs(symbol, count)>}; separator="\n">
+		<rhsCommMembraneTypes, rhsCommSymbols, rhsCommCounts:{membraneType, symbol, count | <Replicate(membraneType, symbol, count)>}; separator="\n">
+	}
+>>
+
+RuleDivisionRhs(lhsSymbols, lhsCounts, divisions) ::= <<
+	d_step {
+		<lhsSymbols, lhsCounts:{symbol, count | <Lhs(symbol, count)>}; separator="\n">
+		<divisions:{division | <division>}; separator="\n">
+	}
+>>
+
+Lhs(symbol, count) ::= "doLhs(instanceIndex, @<symbol>, <count>);"
+
+Rhs(symbol, count) ::= "doRhs(instanceIndex, @<symbol>, <count>);"
+
+RhsForDivision(offset, symbols, counts) ::= "<symbols, counts:{symbol, count | doRhs(instanceCount - <offset>, @<symbol>, <count>);}; separator=\"\n\">"
+
+Replicate(targetType, symbol, count) ::= "doReplicate(<targetType>, @<symbol>, <count>);"
+
+MembraneDivision(childCount, rhsList) ::= <<
+divide(instanceIndex, <childCount>);
+<rhsList:{rhs | <rhs>}; separator="\n">
+>>
+
+MembraneCreation(targetType, childCount, rhsList) ::= <<
+create(instanceIndex, <targetType>, <childCount>);
+<rhsList:{rhs | <rhs>}; separator="\n">
+>>
+
+Dissolution() ::= "doDissolve(instanceIndex);"
+
+Symbol(symbol) ::= "ms[instanceIndex].x[@<symbol>]"
+
+SymbolMultiplicityCheck(symbol, count) ::= "<Symbol(symbol)> >= <count>"
+
+Gt(left, right) ::= "<left> > <right>"
+Ge(left, right) ::= "<left> >= <right>"
+Lt(left, right) ::= "<left> \< <right>"
+Le(left, right) ::= "<left> \<= <right>"
+Eq(left, right) ::= "<left> == <right>"
+Ne(left, right) ::= "<left> != <right>"
+
+OrJoined(items) ::= "<items; separator=\" || \">"
+
+AndJoined(items) ::= "<items; separator=\" && \">"
+
+MembraneInstancePrint(symbols) ::= <<
+inline printInstanceData(instanceIndex) {
+	d_step {
+		printf("\n%d %d %d ", step, ms[instanceIndex].type, instanceIndex);
+		<symbols:{symbol | 
+			if 
+			::	ms[instanceIndex].x[@<symbol>] >= 1 -> printf("<symbol>:%d,", ms[instanceIndex].x[@<symbol>]);
+			::	else -> skip;
+			fi;
+		}>
+	}
+}
+>>
+
+/*
+			printf("<symbol> : %d,", ms[instanceIndex].x[@<symbol>]);
+*/
+
+MembraneInstancePrint1(symbols) ::= <<
+inline printInstanceData(instanceIndex) {
+	d_step {
+		printf("\nInstance: %d [type: %d] :: <symbols:{symbol | <symbol>: %d}; separator=", ">\n\n", 
+			instanceIndex, 
+			ms[instanceIndex].type,
+			<symbols:{symbol | ms[instanceIndex].x[@<symbol>]}; separator=",\n">);
+	}
+}
+>>

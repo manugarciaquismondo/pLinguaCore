@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<simulators>
+	<simulator id="fuzzyBaseSimulator"
+		class="org.gcn.plinguacore.simulator.fuzzy.FuzzyBaseSimulator"></simulator>
+
+</simulators>
