@@ -1,0 +1,14 @@
+#Fat Jar Configuration File
+#Fri Aug 15 13:18:44 CEST 2014
+onejar.license.required=false
+manifest.classpath=
+manifest.removesigners=true
+onejar.checkbox=false
+jarname=pLinguaCore.jar
+manifest.mergeall=true
+manifest.mainclass=org.gcn.plinguacore.applications.AppMain
+manifest.file=<createnew>
+jarname.isextern=false
+onejar.expand=
+excludes=<po|pLinguaCore4.1>~lvalencia.pfx;<po|pLinguaCore4.1>~testkeys
+includes=
